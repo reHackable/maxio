@@ -109,4 +109,6 @@ def lines2svn(input_file, output_name):
         output.write('</svg>') # END notebook
         output.close()
 
-main()
+
+if __name__ == "__main__":
+    main()
