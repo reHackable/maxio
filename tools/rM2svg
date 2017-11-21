@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 import sys
 import struct
+import os.path
+import argparse
+
+
+__prog_name__ = "rM2svn"
+__version__ = "0.0.1beta"
+
+
+# Size
+x_width = 1404
+y_width = 1872
 
 # Mappings
 stroke_colour={
@@ -14,58 +25,88 @@ stroke_width={
     0x40080000 : 10,
 }
 
-x_width = 1404
-y_width = 1872
 
-# Read the file in memory. Consider optimising by reading chunks.
-data = sys.stdin.buffer.read()
-offset = 0
+def main():
+    parser = argparse.ArgumentParser(prog=__prog_name__)
+    parser.add_argument("-i",
+                        "--input",
+                        help=".lines input file",
+                        required=True,
+                        metavar="FILENAME",
+                        )
+    parser.add_argument("-o",
+                        "--output",
+                        help="prefix for output file",
+                        required=True,
+                        metavar="NAME",
+                        )
+    args = parser.parse_args()
 
-# Is this a reMarkable .lines file?
-expected_header=b'reMarkable lines with selections and layers'
-if len(data) < len(expected_header) + 4:
-    print('File too short to be a valid file')
+    if not os.path.exists(args.input):
+        parser.error('The file "{}" does not exist!'.format(args.input))
+
+    lines2svn(args.input, args.output)
+
+
+def abort(msg):
+    print(msg, file=sys.stderr)
     sys.exit(1)
 
-fmt = '<{}sI'.format(len(expected_header))
-header, npages = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
-if header != expected_header or npages < 1:
-    print('Not a valid reMarkable file: <header={}><npages={}>'.format(header, npages))
-    sys.exit(1)
 
-# Merging all layers and all pages in the same svg, for now
-print('<svg height="{}" width="{}">'.format(y_width, x_width)) # BEGIN notebook
+def lines2svn(input_file, output_name):
+    # Read the file in memory. Consider optimising by reading chunks.
+    with open(input_file, 'rb') as f:
+        data = f.read()
+    offset = 0
 
-# Iterate through pages (There is at least one)
-for page in range(npages):
-    fmt = '<BBH' # TODO might be 'I'
-    nlayers, b_unk, h_unk = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
-    if b_unk != 0 or h_unk != 0: # Might indicate which layers are visible.
-        print('Unexpected value on page {} after nlayers'.format(page + 1))
+    if output_name.endswith(".svn"):
+        output_name = output_name[:-4]
 
-    # Iterate through layers on the page (There is at least one)
-    for layer in range(nlayers):
-        fmt = '<I'
-        (nstrokes,) = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+    # Is this a reMarkable .lines file?
+    expected_header=b'reMarkable lines with selections and layers'
+    if len(data) < len(expected_header) + 4:
+        abort('File too short to be a valid file')
 
-        # Iterate through the strokes in the layer (If there is any)
-        for stroke in range(nstrokes):
-            fmt = '<IIIII'
-            pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
-            if i_unk != 0: # No theory on that one
-                print('Unexpected value at offset {}'.format(offset - 12))
-            print('<polyline style="fill:none;stroke:{};stroke-width:{}" points="'.format(stroke_colour[colour], stroke_width[width]), end='') # BEGIN stroke
-
-            # Iterate through the segments to form a polyline
-            for segment in range(nsegments):
-                fmt = '<ffIII'
-                xpos, ypos, tilt, pressure, i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
-                #xconverted = 0.098 * math.exp(float(xpos % MOD) / float(11750000))
-                #yconverted = 0.106 * math.exp(float(ypos % MOD) / float(11860000))
-                print('{:.3f},{:.3f} '.format(xpos, ypos), end='') # BEGIN and END polyline segment
-
-            print('" />') # END stroke
-
-print('</svg>') # END notebook
+    fmt = '<{}sI'.format(len(expected_header))
+    header, npages = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+    if header != expected_header or npages < 1:
+        abort('Not a valid reMarkable file: <header={}><npages={}>'.format(header, npages))
 
 
+    # Iterate through pages (There is at least one)
+    for page in range(npages):
+        output = open("{}_{:02}.svn".format(output_name, page+1), 'w')
+
+        # Merging all layers in the same svg, for now
+        output.write('<svg height="{}" width="{}">\n'.format(y_width, x_width)) # BEGIN notebook
+
+        fmt = '<BBH' # TODO might be 'I'
+        nlayers, b_unk, h_unk = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+        if b_unk != 0 or h_unk != 0: # Might indicate which layers are visible.
+            print('Unexpected value on page {} after nlayers'.format(page + 1))
+
+        # Iterate through layers on the page (There is at least one)
+        for layer in range(nlayers):
+            fmt = '<I'
+            (nstrokes,) = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+
+            # Iterate through the strokes in the layer (If there is any)
+            for stroke in range(nstrokes):
+                fmt = '<IIIII'
+                pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                if i_unk != 0: # No theory on that one
+                    print('Unexpected value at offset {}'.format(offset - 12))
+                output.write('<polyline style="fill:none;stroke:{};stroke-width:{}" points="'.format(stroke_colour[colour], stroke_width[width])) # BEGIN stroke
+
+                # Iterate through the segments to form a polyline
+                for segment in range(nsegments):
+                    fmt = '<ffIII'
+                    xpos, ypos, tilt, pressure, i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                    output.write('{:.3f},{:.3f} '.format(xpos, ypos)) # BEGIN and END polyline segment
+
+                output.write('" />\n') # END stroke
+
+        output.write('</svg>') # END notebook
+        output.close()
+
+main()
