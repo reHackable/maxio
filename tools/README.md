@@ -9,4 +9,5 @@ optional arguments:
   -h, --help                      show this help message and exit
   -i FILENAME, --input FILENAME   .lines input file
   -o NAME, --output NAME          prefix for output file
+  --version                       show program's version number and exit
 ```

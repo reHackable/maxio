@@ -40,6 +40,9 @@ def main():
                         required=True,
                         metavar="NAME",
                         )
+    parser.add_argument('--version',
+                        action='version',
+                        version='%(prog)s {version}'.format(version=__version__))
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
