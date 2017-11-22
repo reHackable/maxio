@@ -5,7 +5,7 @@ import os.path
 import argparse
 
 
-__prog_name__ = "rM2svn"
+__prog_name__ = "rM2svg"
 __version__ = "0.0.1beta"
 
 
@@ -28,17 +28,24 @@ stroke_width={
 
 def main():
     parser = argparse.ArgumentParser(prog=__prog_name__)
+    parser.add_argument("-1",
+                        "--singlefile",
+                        help="Enable multipage svg file",
+                        action='store_true',
+                        )
     parser.add_argument("-i",
                         "--input",
                         help=".lines input file",
                         required=True,
                         metavar="FILENAME",
+                        #type=argparse.FileType('r')
                         )
     parser.add_argument("-o",
                         "--output",
-                        help="prefix for output file",
+                        help="prefix for output files",
                         required=True,
                         metavar="NAME",
+                        #type=argparse.FileType('w')
                         )
     parser.add_argument('--version',
                         action='version',
@@ -48,7 +55,7 @@ def main():
     if not os.path.exists(args.input):
         parser.error('The file "{}" does not exist!'.format(args.input))
 
-    lines2svn(args.input, args.output)
+    lines2svg(args.input, args.output, args.singlefile)
 
 
 def abort(msg):
@@ -56,13 +63,13 @@ def abort(msg):
     sys.exit(1)
 
 
-def lines2svn(input_file, output_name):
+def lines2svg(input_file, output_name, singlefile):
     # Read the file in memory. Consider optimising by reading chunks.
     with open(input_file, 'rb') as f:
         data = f.read()
     offset = 0
 
-    if output_name.endswith(".svn"):
+    if output_name.endswith(".svg") and not singlefile:
         output_name = output_name[:-4]
 
     # Is this a reMarkable .lines file?
@@ -75,13 +82,27 @@ def lines2svn(input_file, output_name):
     if header != expected_header or npages < 1:
         abort('Not a valid reMarkable file: <header={}><npages={}>'.format(header, npages))
 
+    if singlefile:
+        output = open(output_name, 'w')
+        output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">'.format(y_width, x_width)) # BEGIN Notebook
+        output.write('''
+            <script type="application/ecmascript"> <![CDATA[
+                var visiblePage = 'p0';
+                function goToPage(page) {
+                    document.getElementById(visiblePage).setAttribute('style', 'display: none');
+                    document.getElementById(page).setAttribute('style', 'display: inline');
+                    visiblePage = page;
+                }
+            ]]> </script>
+        ''')
 
     # Iterate through pages (There is at least one)
     for page in range(npages):
-        output = open("{}_{:02}.svn".format(output_name, page+1), 'w')
-
-        # Merging all layers in the same svg, for now
-        output.write('<svg height="{}" width="{}">\n'.format(y_width, x_width)) # BEGIN notebook
+        if singlefile:
+            output.write('<g id="p{}" style="display:{}">'.format(page, 'none' if page != 0 else 'inline')) # Opening page group, visible only for the first page.
+        else:
+            output = open("{}_{:02}.svg".format(output_name, page+1), 'w')
+            output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">\n'.format(y_width, x_width)) # BEGIN page
 
         fmt = '<BBH' # TODO might be 'I'
         nlayers, b_unk, h_unk = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
@@ -109,9 +130,17 @@ def lines2svn(input_file, output_name):
 
                 output.write('" />\n') # END stroke
 
+        if singlefile:
+            # Overlay the page with a clickable rect to flip pages
+            output.write('<rect x="0" y="0" width="{}" height="{}" fill-opacity="0" onclick="goToPage(\'p{}\')" />'.format(x_width, y_width, (page + 1) % npages))
+            output.write('</g>') # Closing page group
+        else:
+            output.write('</svg>') # END page
+            output.close()
+
+    if singlefile:
         output.write('</svg>') # END notebook
         output.close()
-
 
 if __name__ == "__main__":
     main()
