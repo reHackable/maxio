@@ -122,7 +122,9 @@ def lines2svg(input_file, output_name, singlefile):
                 last_x = -1.; last_y = -1.
                 #if i_unk != 0: # No theory on that one
                     #print('Unexpected value at offset {}'.format(offset - 12))
-                if pen == 2 or pen == 4: # Pen / Fineliner
+                if pen == 0 or pen == 1:
+                    pass # Dynamic width, will be truncated into several strokes
+                elif pen == 2 or pen == 4: # Pen / Fineliner
                     width = 32 * width * width - 116 * width + 107
                 elif pen == 3: # Marker
                     width = 64 * width - 112
@@ -136,6 +138,12 @@ def lines2svg(input_file, output_name, singlefile):
                 elif pen == 7: # Pencil-Sharp
                     width = 16 * width - 27
                     opacity = 0.9
+                elif pen == 8: # Erase area
+                    opacity = 0.
+                else: 
+                    print('Unknown pen: {}'.format(pen))
+                    opacity = 0.
+
                 #print('Stroke {}: pen={}, colour={}, width={}, nsegments={}'.format(stroke, pen, colour, width, nsegments))
                 output.write('<polyline style="fill:none;stroke:{};stroke-width:{:.3f};opacity:{}" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
 
