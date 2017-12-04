@@ -19,11 +19,11 @@ stroke_colour={
     1 : "grey",
     2 : "white",
 }
-stroke_width={
-    0x3ff00000 : 1,
-    0x40000000 : 5,
-    0x40080000 : 10,
-}
+'''stroke_width={
+    0x3ff00000 : 2,
+    0x40000000 : 4,
+    0x40080000 : 8,
+}'''
 
 
 def main():
@@ -116,11 +116,27 @@ def lines2svg(input_file, output_name, singlefile):
 
             # Iterate through the strokes in the layer (If there is any)
             for stroke in range(nstrokes):
-                fmt = '<IIIII'
+                fmt = '<IIIfI'
                 pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
-                if i_unk != 0: # No theory on that one
-                    print('Unexpected value at offset {}'.format(offset - 12))
-                output.write('<polyline style="fill:none;stroke:{};stroke-width:{}" points="'.format(stroke_colour[colour], stroke_width[width])) # BEGIN stroke
+                opacity = 1
+                #if i_unk != 0: # No theory on that one
+                    #print('Unexpected value at offset {}'.format(offset - 12))
+                if pen == 2 or pen == 4: # Pen / Fineliner
+                    width = 32 * width * width - 116 * width + 107
+                elif pen == 3: # Marker
+                    width = 64 * width - 112
+                    opacity = 0.9
+                elif pen == 5: # Highlighter
+                    width = 30
+                    opacity = 0.2
+                elif pen == 7: # Pencil-Sharp
+                    width = 16 * width - 27
+                    opacity = 0.9
+                elif pen == 6: # Eraser
+                    width = 1280 * width * width - 4800 * width + 4510
+                    colour = 2
+                print('Stroke {}: pen={}, colour={}, width={}, nsegments={}'.format(stroke, pen, colour, width, nsegments))
+                output.write('<polyline style="fill:none;stroke:{};stroke-width:{};opacity:{}" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
 
                 # Iterate through the segments to form a polyline
                 for segment in range(nsegments):
