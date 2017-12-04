@@ -119,6 +119,7 @@ def lines2svg(input_file, output_name, singlefile):
                 fmt = '<IIIfI'
                 pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
                 opacity = 1
+                last_x = -1.; last_y = -1.
                 #if i_unk != 0: # No theory on that one
                     #print('Unexpected value at offset {}'.format(offset - 12))
                 if pen == 2 or pen == 4: # Pen / Fineliner
@@ -129,19 +130,39 @@ def lines2svg(input_file, output_name, singlefile):
                 elif pen == 5: # Highlighter
                     width = 30
                     opacity = 0.2
-                elif pen == 7: # Pencil-Sharp
-                    width = 16 * width - 27
-                    opacity = 0.9
                 elif pen == 6: # Eraser
                     width = 1280 * width * width - 4800 * width + 4510
                     colour = 2
-                print('Stroke {}: pen={}, colour={}, width={}, nsegments={}'.format(stroke, pen, colour, width, nsegments))
-                output.write('<polyline style="fill:none;stroke:{};stroke-width:{};opacity:{}" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
+                elif pen == 7: # Pencil-Sharp
+                    width = 16 * width - 27
+                    opacity = 0.9
+                #print('Stroke {}: pen={}, colour={}, width={}, nsegments={}'.format(stroke, pen, colour, width, nsegments))
+                output.write('<polyline style="fill:none;stroke:{};stroke-width:{:.3f};opacity:{}" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
 
                 # Iterate through the segments to form a polyline
                 for segment in range(nsegments):
-                    fmt = '<ffIII'
-                    xpos, ypos, tilt, pressure, i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                    fmt = '<fffff'
+                    xpos, ypos, pressure, tilt, i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                    if pen == 0:
+                        if 0 == segment % 8:
+                            segment_width = (5. * tilt) * (6. * width - 10) * (1 + 2. * pressure * pressure * pressure)
+                            #print('    width={}'.format(segment_width))
+                            output.write('" /><polyline style="fill:none;stroke:{};stroke-width:{:.3f}" points="'.format(
+                                        stroke_colour[colour], segment_width)) # UPDATE stroke
+                            if last_x != -1.:
+                                output.write('{:.3f},{:.3f} '.format(last_x, last_y)) # Join to previous segment
+                            last_x = xpos; last_y = ypos
+                    elif pen == 1:
+                        if 0 == segment % 8:
+                            segment_width = (10. * tilt -2) * (8. * width - 14)
+                            segment_opacity = (pressure - .2) * (pressure - .2)
+                            #print('    width={}, opacity={}'.format(segment_width, segment_opacity))
+                            output.write('" /><polyline style="fill:none;stroke:{};stroke-width:{:.3f};opacity:{:.3f}" points="'.format(
+                                        stroke_colour[colour], segment_width, segment_opacity)) # UPDATE stroke
+                            if last_x != -1.:
+                                output.write('{:.3f},{:.3f} '.format(last_x, last_y)) # Join to previous segment
+                            last_x = xpos; last_y = ypos
+
                     output.write('{:.3f},{:.3f} '.format(xpos, ypos)) # BEGIN and END polyline segment
 
                 output.write('" />\n') # END stroke
