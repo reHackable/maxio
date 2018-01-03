@@ -13,12 +13,15 @@ optional arguments:
 ```
 
 ## exportNotebook
-Convert a Notebook to a PDF file
+Convert a Notebook to a PDF file: Searches for the most recent Notebook whose visible name contains NAME, and export it as PDF file.
+
 
 ```
 usage: exportNotebook NAME
 
-Searches for the most recent Notebook whose visible name contains NAME, and export it as PDF file.
+$ exportNotebook Jour
+Exporting notebook "Journal" (4 pages)
+Journal.pdf
 ```
 
 
