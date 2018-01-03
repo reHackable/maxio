@@ -11,3 +11,14 @@ optional arguments:
   -o NAME, --output NAME          prefix for output file
   --version                       show program's version number and exit
 ```
+
+## exportNotebook
+Convert a Notebook to a PDF file
+
+```
+usage: exportNotebook NAME
+
+Searches for the most recent Notebook whose visible name contains NAME, and export it as PDF file.
+```
+
+
