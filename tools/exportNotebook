@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Needs:
+# - ssh and scp (openssh)
+# - convert (imagemagick)
+
+# Getting the notebook prefix (Newest notebook matching the name)
+id=$(ssh root@10.11.99.1 "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
+
+test -z "$id" && exit 1
+
+tmpfolder=$(mktemp -d)
+
+# Getting notebook data
+scp -q root@10.11.99.1:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
+
+filename=$(grep -F  '"visibleName"' "${tmpfolder}"/*.metadata | cut -d: -f2- | grep -o '"[^"]*"')
+echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1) pages)"
+
+# Getting template files
+sort -u "${tmpfolder}"/*.pagedata | while read -r tpl; do
+  scp -q root@10.11.99.1:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
+done
+
+# Generate a PDF file out of the templates
+sed -e "s|^|\"${tmpfolder}\"/\"|" -e 's|$|.png"|' "${tmpfolder}"/*.pagedata | tr '\n' ' ' | sed -e "s|$|-transparent white \"${tmpfolder}\"/background.pdf|" | xargs convert
+
+# Extract annotations and create a PDF
+./rM2svg --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground"
+convert -density 100 "${tmpfolder}"/foreground*.svg -transparent white "${tmpfolder}"/foreground.pdf
+
+pdftk "${tmpfolder}"/foreground.pdf multibackground "${tmpfolder}"/background.pdf output "${filename//\"/}.pdf"
+
+ls "${filename//\"/}.pdf"
+
+rm -Rf "${tmpfolder}"
