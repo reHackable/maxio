@@ -3,6 +3,7 @@
 # Needs:
 # - ssh and scp (openssh)
 # - convert (imagemagick)
+# - pdftk (pdftk)
 
 # Getting the notebook prefix (Newest notebook matching the name)
 id=$(ssh root@10.11.99.1 "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
