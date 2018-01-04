@@ -15,6 +15,9 @@ tmpfolder=$(mktemp -d)
 # Getting notebook data
 scp -q root@10.11.99.1:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
 
+# Fix empty lines in pagedata files
+sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
+
 filename=$(grep -F  '"visibleName"' "${tmpfolder}"/*.metadata | cut -d: -f2- | grep -o '"[^"]*"')
 echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1) pages)"
 
