@@ -15,6 +15,9 @@ tmpfolder=$(mktemp -d)
 # Getting notebook data
 scp -q root@10.11.99.1:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
 
+# Fix empty lines in pagedata files
+sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
+
 filename=$(grep -F  '"visibleName"' "${tmpfolder}"/*.metadata | cut -d: -f2- | grep -o '"[^"]*"')
 echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1) pages)"
 
@@ -27,7 +30,7 @@ done
 sed -e "s|^|\"${tmpfolder}\"/\"|" -e 's|$|.png"|' "${tmpfolder}"/*.pagedata | tr '\n' ' ' | sed -e "s|$|-transparent white \"${tmpfolder}\"/background.pdf|" | xargs convert
 
 # Extract annotations and create a PDF
-./rM2svg --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground"
+rM2svg --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground"
 convert -density 100 "${tmpfolder}"/foreground*.svg -transparent white "${tmpfolder}"/foreground.pdf
 
 pdftk "${tmpfolder}"/foreground.pdf multibackground "${tmpfolder}"/background.pdf output "${filename//\"/}.pdf"
