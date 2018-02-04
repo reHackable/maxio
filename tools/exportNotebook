@@ -4,6 +4,7 @@
 # - ssh and scp (openssh)
 # - convert (imagemagick)
 # - pdftk (pdftk)
+# - rsvg-convert (optional, to avoid rasterizing of lines)
 
 # Check if ssh configuration for "remarkable" exists
 grep -Fxq "host remarkable" ~/.ssh/config
@@ -39,10 +40,17 @@ sed -e "s|^|\"${tmpfolder}\"/\"|" -e 's|$|.png"|' "${tmpfolder}"/*.pagedata | tr
 
 # Extract annotations and create a PDF
 rM2svg --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground"
-convert -density 100 "${tmpfolder}"/foreground*.svg -transparent white "${tmpfolder}"/foreground.pdf
+
+if type "rsvg-convert" > /dev/null
+  then
+    convert -density 100 "${tmpfolder}"/foreground*.svg -transparent white "${tmpfolder}"/foreground.pdf
+  else
+    rsvg-convert -a -f pdf "${tmpfolder}"/foreground*.svg -o "${tmpfolder}"/foreground.pdf
+fi
 
 pdftk "${tmpfolder}"/foreground.pdf multibackground "${tmpfolder}"/background.pdf output "${filename//\"/}.pdf"
 
-ls "${filename//\"/}.pdf"
+filesize=$(ls -la "${filename//\"/}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
+echo "Written ${filesize} to ${filename//\"/}.pdf"
 
 rm -Rf "${tmpfolder}"
