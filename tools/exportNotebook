@@ -23,6 +23,12 @@ tmpfolder=$(mktemp -d)
 # Getting notebook data
 scp -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
 
+# Fix for single page notebooks with no template (empty pagedata file by default)
+if [ ! -s "${tmpfolder}"/*.pagedata ]
+then
+  echo "Blank" > "${tmpfolder}"/*.pagedata
+fi
+
 # Fix empty lines in pagedata files
 sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
 
