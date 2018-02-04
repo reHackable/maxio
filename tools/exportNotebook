@@ -5,15 +5,23 @@
 # - convert (imagemagick)
 # - pdftk (pdftk)
 
+# Check if ssh configuration for "remarkable" exists
+grep -Fxq "host remarkable" ~/.ssh/config
+if [ $? -eq 0 ]; then
+    SSH_IP="root@remarkable"
+else
+    SSH_IP="root@10.11.99.1"
+fi
+
 # Getting the notebook prefix (Newest notebook matching the name)
-id=$(ssh root@10.11.99.1 "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
+id=$(ssh ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
 
 test -z "$id" && exit 1
 
 tmpfolder=$(mktemp -d)
 
 # Getting notebook data
-scp -q root@10.11.99.1:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
+scp -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
 
 # Fix empty lines in pagedata files
 sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
@@ -23,7 +31,7 @@ echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d
 
 # Getting template files
 sort -u "${tmpfolder}"/*.pagedata | while read -r tpl; do
-  scp -q root@10.11.99.1:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
+  scp -q ${SSH_IP}:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
 done
 
 # Generate a PDF file out of the templates
