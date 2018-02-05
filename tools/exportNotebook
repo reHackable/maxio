@@ -8,6 +8,7 @@
 
 if [[ $# -eq 0 ]] ; then
     echo "Usage: ./exportNotebook (Partial)NotebookName AdditionalrM2svgArguments"
+    echo "You can additionally append the -c argument for coloured annotations."
     exit 0
 fi
 
