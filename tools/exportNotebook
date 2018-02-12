@@ -60,7 +60,6 @@ then
 
         # Calculate new width and necessary offset (rM dimensions: 1404x1872)
         new_width=$(echo "scale=5; ${height} / 1872 * 1404" | bc)
-        echo "new width, ${new_width}"
         offset=$(echo "scale=5; ${new_width} - ${width}" | bc)
         echo "Original PDF dimensions are ${size}, correcting by offset of ${offset} to fit rM foreground."
 
