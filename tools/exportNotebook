@@ -5,7 +5,7 @@
 # - convert (imagemagick)
 # - pdftk (pdftk)
 # - rsvg-convert (optional, to avoid rasterizing of lines)
-# - gs & identify (optional, to account for original pdf size)
+# - gs & pdfinfo (optional, to account for original pdf size)
 
 if [[ $# -eq 0 ]] ; then
     echo "Usage: ./exportNotebook (Partial)NotebookName AdditionalrM2svgArguments"
@@ -51,17 +51,18 @@ then
     ln -s "${tmpfolder}/"*.pdf "${tmpfolder}/background_original.pdf"
     echo "Found underlying document PDF, using as background."
 
-    if command -v "gs" > /dev/null && command -v "identify" > /dev/null
+    if command -v "gs" > /dev/null && command -v "pdfinfo" > /dev/null
     then
         # Read PDF dimensions for scale correction
-        size=$(identify ${tmpfolder}/background_original.pdf | awk '{print $3}')
-        width=$(echo ${size} | cut -f1 -dx)
-        height=$(echo ${size} | cut -f2 -dx)
+        size=$(pdfinfo ${tmpfolder}/background_original.pdf | grep "Page size" | awk '{print $3,$5}')
+        width=$(echo ${size} | cut -f1 -d " ")
+        height=$(echo ${size} | cut -f2 -d " ")
 
         # Calculate new width and necessary offset (rM dimensions: 1404x1872)
         new_width=$(echo "scale=5; ${height} / 1872 * 1404" | bc)
         offset=$(echo "scale=5; ${new_width} - ${width}" | bc)
-        echo "Original PDF dimensions are ${size}, correcting by offset of ${offset} to fit rM foreground."
+
+        echo "Original PDF dimensions are (${width}x${height}), correcting by offset of ${offset} to fit rM foreground."
 
         # Add offset to background.pdf to match foreground dimensions
         gs -q -sDEVICE=pdfwrite -dBATCH -dNOPAUSE -sOutputFile=${tmpfolder}/background_with_offset.pdf \

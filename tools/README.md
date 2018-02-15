@@ -6,7 +6,7 @@ The following binaries are required running these tools:
  * ssh
  * scp
  * convert or rsvg-convert
- * optional: ghostscript and identify to account for original pdf dimensions
+ * optional: ghostscript and pdfinfo to account for original pdf dimensions
 
 If you are using a Debian-based Linux system, the following command should
 install all requirements:
