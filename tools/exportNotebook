@@ -12,6 +12,19 @@ if [[ $# -eq 0 ]] ; then
     exit 0
 fi
 
+# Make sure we have rM2svg
+command -v rM2svg >/dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+    if [[ -x rM2svg ]]; then
+        rM2svg_cmd="$(dirname `readlink -f $0`)/rM2svg"
+    else
+        print "Cannot find rM2svg"
+        exit 1
+    fi
+else
+    rM2svg_cmd="rM2svg"
+fi
+
 # Check if ssh configuration for "remarkable" exists
 grep -Fxq "host remarkable" ~/.ssh/config
 if [ $? -eq 0 ]; then
@@ -65,7 +78,7 @@ else
 fi
 
 # Extract annotations and create a PDF
-rM2svg --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground" $2
+$rM2svg_cmd --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground" $2
 
 if command -v "rsvg-convert" > /dev/null
 then
