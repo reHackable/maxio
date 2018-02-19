@@ -6,11 +6,12 @@ The following binaries are required running these tools:
  * ssh
  * scp
  * convert or rsvg-convert
+ * optional: ghostscript and pdfinfo to account for original pdf dimensions
 
 If you are using a Debian-based Linux system, the following command should
 install all requirements:
 
-	sudo apt-get install python3 librsvg2-bin pdftk openssh-client
+	sudo apt-get install python3 librsvg2-bin pdftk openssh-client ghostscript
 
 ## rM2svg
 
