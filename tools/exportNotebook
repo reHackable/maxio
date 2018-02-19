@@ -20,18 +20,23 @@ else
     SSH_IP="root@10.11.99.1"
 fi
 
+# Start SSH in ControlMaster mode
+control_path_dir=$(mktemp -d --suffix=ssh_remark)
+control_options="-o ControlPath=$control_path_dir/%h_%p_%r -o ControlPersist=10s"
+ssh -M ${control_options} ${SSH_IP} exit
+
 # Getting the notebook prefix (Newest notebook matching the name)
-id=$(ssh ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
+id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
 
 test -z "$id" && exit 1
 
 tmpfolder=$(mktemp -d)
 
 # Getting notebook data
-scp -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
+scp $control_options -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
 
 # Copy underyling document pdf if it exists
-ssh -q ${SSH_IP} "[[ -f "${id}.pdf" ]]" && scp -q ${SSH_IP}:"${id}.pdf" "${tmpfolder}"
+ssh $control_options -q ${SSH_IP} "[[ -f "${id}.pdf" ]]" && scp $control_options -q ${SSH_IP}:"${id}.pdf" "${tmpfolder}"
 
 # Fix for single page notebooks with no template (empty pagedata file by default)
 if [ ! -s "${tmpfolder}"/*.pagedata ]
@@ -52,7 +57,7 @@ then
 else
     # Getting template files
     sort -u "${tmpfolder}"/*.pagedata | while read -r tpl; do
-    scp -q ${SSH_IP}:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
+    scp $control_options -q ${SSH_IP}:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
     done
 
     # Generate a PDF file out of the templates
@@ -78,4 +83,5 @@ pdftk "${tmpfolder}"/foreground.pdf multistamp "${tmpfolder}"/background.pdf out
 filesize=$(ls -la "${filename}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
 echo "Written ${filesize} to ${filename}.pdf"
 
-rm -Rf "${tmpfolder}"
+ssh $control_options -O exit ${SSH_IP}
+rm -Rf "${tmpfolder}" "${control_path_dir}"
