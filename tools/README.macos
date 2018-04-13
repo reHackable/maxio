@@ -1,0 +1,55 @@
+# Collection of tools for the reMarkable paper tablet
+
+# MacOS instructions:
+
+1. Install MacPorts
+
+The following binaries are required running these tools:
+
+ * python3
+ * imagemagick
+ * pdftk
+ * librsvg
+
+Once MacPorts is installed, the following two commands should install all requirements:
+
+	sudo port install python3 imagemagick librsvg pdftk
+	sudo port select --set python3 python36
+
+## The rest of the README file is unchanged from here on:
+
+## rM2svg
+
+Convert a .lines file to an svg file
+
+    usage: rM2svn [-h] -i FILENAME -o NAME
+
+    optional arguments:
+      -h, --help                      show this help message and exit
+      -i FILENAME, --input FILENAME   .lines input file
+      -o NAME, --output NAME          prefix for output file
+      --version                       show program's version number and exit
+
+## exportNotebook
+
+Convert a Notebook to a PDF file: Searches for the most recent Notebook whose
+visible name contains NAME, and exports it as PDF file. Works also for
+(annotated PDF files).
+
+    usage: exportNotebook NAME
+
+    $ exportNotebook Jour
+    Exporting notebook "Journal" (4 pages)
+    Journal.pdf
+
+### SSH configuration
+
+The `exportNotebook` script assumes a USB connection. If you are connected via
+WiFi, you can add an entry to your `~/.ssh/config`:
+
+    host remarkable
+		   # adapt IP if necessary
+           Hostname 10.11.99.1
+           User root
+           ForwardX11 no
+           ForwardAgent no

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
-# Needs:
+# Linux Needs:
 # - ssh and scp (openssh)
 # - convert (imagemagick)
 # - pdftk (pdftk)
 # - rsvg-convert (optional, to avoid rasterizing of lines)
 # - gs & pdfinfo (optional, to account for original pdf size)
+#
+# MacOS Needs: (see README.macos)
+# - python3
+# - convert (imagemagick)
+# - pdftk
+# - librsvg
 
 if [[ $# -eq 0 ]] ; then
     echo "Usage: ./exportNotebook (Partial)NotebookName AdditionalrM2svgArguments"
@@ -14,16 +20,12 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 # Make sure we have rM2svg
-command -v rM2svg >/dev/null 2>&1
+command -v ./rM2svg >/dev/null 2>&1
 if [[ $? -ne 0 ]]; then
-    if [[ -x rM2svg ]]; then
-        rM2svg_cmd="$(dirname `readlink -f $0`)/rM2svg"
-    else
-        print "Cannot find rM2svg"
-        exit 1
-    fi
+    print "Cannot find ./rM2svg"
+    exit 1
 else
-    rM2svg_cmd="rM2svg"
+    rM2svg_cmd="./rM2svg"
 fi
 
 # Check if ssh configuration for "remarkable" exists
@@ -35,9 +37,11 @@ else
 fi
 
 # Start SSH in ControlMaster mode
-control_path_dir=$(mktemp -d --suffix=ssh_remark)
+control_path_dir=$(mktemp -d)
 control_options="-o ControlPath=$control_path_dir/%h_%p_%r -o ControlPersist=10s"
 ssh -M ${control_options} ${SSH_IP} exit
+
+echo "Getting notebook prefix"
 
 # Getting the notebook prefix (Newest notebook matching the name)
 id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
@@ -45,6 +49,9 @@ id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.
 test -z "$id" && exit 1
 
 tmpfolder=$(mktemp -d)
+
+echo "Notebook prefix obtained"
+
 
 # Getting notebook data
 scp $control_options -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
@@ -62,7 +69,7 @@ fi
 sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
 
 filename=$(grep -F  '"visibleName"' "${tmpfolder}"/*.metadata | cut -d: -f2- | grep -o '"[^"]*"')
-echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1) pages)"
+echo "Exporting notebook ${filename} ($(ls -1 "${tmpfolder}"/*.pagedata | wc -l | awk '{print $1}') pages)"
 
 if [ -f "${tmpfolder}"/*.pdf ]
 then
@@ -118,8 +125,8 @@ filename=$(basename -s .pdf ${filename//\"/})
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
 
-filesize=$(ls -la "${filename}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
-echo "Written ${filesize} to ${filename}.pdf"
+filesize=$(ls -lask "${filename}.pdf" | awk '{print $1}' )
+echo "Written ${filesize}K to ${filename}.pdf"
 
 ssh $control_options -O exit ${SSH_IP}
 rm -Rf "${tmpfolder}" "${control_path_dir}"
