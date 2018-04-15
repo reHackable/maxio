@@ -1,0 +1,61 @@
+#!/bin/bash
+
+if [ -z "$1" ] || [ -z "$2" ]
+  then
+    echo "Usage: $0 <input_file.lines> <ouput.pdf>"
+    exit 1
+fi
+
+PWD=`dirname "$0"`
+BASE=`basename $1 .lines`
+WIDTH=`pdfinfo ${BASE}.pdf | grep "Page size:" | awk '{print $3}'`
+HEIGHT=`pdfinfo ${BASE}.pdf | grep "Page size:" | awk '{print $5}'`
+OUTPUT=$2
+
+function scale_width {
+	NEW_WIDTH=`echo "${HEIGHT} * 0.75" | bc | sed "s/\..*//g"`
+	#Origin is at left bottom
+	OFFSET=`echo "(${WIDTH} - ${NEW_WIDTH}) / 2.0" | bc | sed "s/\..*//g"`
+
+	$PWD/rM2svg -c -i ${BASE}.lines -o ${BASE}.svg
+	for i in `ls ${BASE}_*.svg`
+	do
+		rsvg-convert -w ${NEW_WIDTH} -h ${HEIGHT} -f pdf $i > `sed "s/svg/pdf/g" <<< "$i"`
+	done
+
+	PDF_FILES=`ls ${BASE}_*.pdf | sort -V`
+	pdftk ${PDF_FILES} cat output ${BASE}_annotations.pdf
+	rm ${PDF_FILES}
+	rm `ls ${BASE}_*.svg`
+	pdfjam --papersize "{${NEW_WIDTH}pt,${HEIGHT}pt}" --offset "${OFFSET}pt 0pt" --outfile ${BASE}_resized.pdf ${BASE}.pdf
+	pdftk ${BASE}_resized.pdf multistamp ${BASE}_annotations.pdf output ${OUTPUT}
+	rm ${BASE}_resized.pdf ${BASE}_annotations.pdf
+}
+
+function scale_height {
+	NEW_HEIGHT=`echo "${WIDTH} * 1.3333" | bc | sed "s/\..*//g"`
+	#Origin is at left bottom
+	OFFSET=`echo "(${NEW_HEIGHT} - ${HEIGHT}) / 2.0" | bc | sed "s/\..*//g"`
+
+	$PWD/rM2svg -i ${BASE}.lines -o ${BASE}.svg
+	for i in `ls ${BASE}_*.svg`
+	do
+		rsvg-convert -w ${WIDTH} -h ${NEW_HEIGHT} -f pdf $i > `sed "s/svg/pdf/g" <<< "$i"`
+	done
+
+	PDF_FILES=`ls ${BASE}_*.pdf | sort -V`
+	pdftk ${PDF_FILES} cat output ${BASE}_annotations.pdf
+	rm ${PDF_FILES}
+	rm `ls ${BASE}_*.svg`
+	pdfjam --papersize "{${WIDTH}pt,${NEW_HEIGHT}pt}" --offset "0pt ${OFFSET}pt" --outfile ${BASE}_resized.pdf ${BASE}.pdf
+	pdftk ${BASE}_resized.pdf multistamp ${BASE}_annotations.pdf output ${OUTPUT}
+	rm ${BASE}_resized.pdf ${BASE}_annotations.pdf
+}
+
+#0.75 is the ratio of rM tablet width to height
+R=`echo "${WIDTH}.0 / ${HEIGHT} < 0.75" | bc -l`
+if [[ ${R} == 1 ]]; then
+	scale_width
+else
+	scale_height
+fi

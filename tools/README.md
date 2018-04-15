@@ -6,12 +6,14 @@ The following binaries are required running these tools:
  * ssh
  * scp
  * convert or rsvg-convert
+ * bc
  * optional: ghostscript and pdfinfo to account for original pdf dimensions
+ * pdfjam
 
 If you are using a Debian-based Linux system, the following command should
 install all requirements:
 
-	sudo apt-get install python3 librsvg2-bin pdftk openssh-client ghostscript
+	sudo apt-get install python3 librsvg2-bin pdftk openssh-client ghostscript pdfjam poppler-utils bc
 
 ## rM2svg
 
@@ -36,6 +38,28 @@ visible name contains NAME, and exports it as PDF file. Works also for
     $ exportNotebook Jour
     Exporting notebook "Journal" (4 pages)
     Journal.pdf
+
+## exportDocument
+
+Export an annotated PDF file.
+
+    usage: Usage: exportDocument <input_file.lines> <ouput.pdf>
+
+The command expects the original PDF file <foo>.pdf to be present in the same
+directory as <foo>.lines. This would be the case if you had copied the entire
+`xochitl` directory from your reMarkable tablet to the development machine.
+A typical workflow would be:
+
+```bash
+$ scp -r root@10.11.99.1:/home/root/.local/share/remarkable/xochitl .
+$ cd xochitl
+```
+
+Say `f073469b-d37c-432f-84d1-45fdaf12400b.lines` containts the annotations of
+the interested file. The original filename can be found in the `visibleName`
+field in `f073469b-d37c-432f-84d1-45fdaf12400b.metadata`.
+
+$ exportDocument f073469b-d37c-432f-84d1-45fdaf12400b.lines out.pdf
 
 ### SSH configuration
 
