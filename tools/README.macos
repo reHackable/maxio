@@ -13,7 +13,7 @@ The following binaries are required running these tools:
 
 Once MacPorts is installed, the following two commands should install all requirements:
 
-	sudo port install python3 imagemagick librsvg pdftk
+	sudo port install python36 imagemagick librsvg pdftk
 	sudo port select --set python3 python36
 
 ## The rest of the README file is unchanged from here on:
