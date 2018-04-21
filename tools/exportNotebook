@@ -122,6 +122,9 @@ fi
 # Strip .pdf suffix if it already exists (document vs. notebook)
 filename=$(basename -s .pdf ${filename//\"/})
 
+# Destroy all special characters
+filename=`echo $filename | tr -dc '[:print:]\n\r'`
+
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
 
