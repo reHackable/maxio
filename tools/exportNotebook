@@ -128,8 +128,8 @@ filename=`echo $filename | tr -dc '[:print:]\n\r'`
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
 
-filesize=$(ls -lask "${filename}.pdf" | awk '{print $1}' )
-echo "Written ${filesize}K to ${filename}.pdf"
+filesize=$(ls -lah "${filename}.pdf" | awk '{print $5}' )
+echo "Written ${filesize} to ${filename}.pdf"
 
 ssh $control_options -O exit ${SSH_IP}
 rm -Rf "${tmpfolder}" "${control_path_dir}"
