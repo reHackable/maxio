@@ -167,7 +167,7 @@ def copy_notebook_data(client, tmp, notebook_id):
         for filename in filenames:
             remotepath = os.path.join(os.path.dirname(notebook_id), filename)
             localpath = os.path.join(tmp, filename)
-            print("Copying {} into {}".format(remotepath, localpath))
+            # print("Copying {} into {}".format(remotepath, localpath))
             sftp.get(remotepath, localpath)
 
         if filename.endswith(".pagedata") and \
@@ -186,7 +186,7 @@ def copy_notebook_data(client, tmp, notebook_id):
             for tpl_fname in set(templates):
                 remotepath = os.path.join(TPL_PATH, tpl_fname)
                 localpath = os.path.join(tmp, tpl_fname)
-                print("Copying {} into {}".format(remotepath, localpath))
+                # print("Copying {} into {}".format(remotepath, localpath))
                 sftp.get(remotepath, localpath)
 
     finally:
