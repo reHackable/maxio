@@ -384,16 +384,18 @@ def make_annotated_pdf(name, background, foreground, pdftk=False):
     print("Written {} to {}".format(os.stat(name).st_size, name))
 
 
-if __name__ == "__main__":
-    args = parse_args_or_exit(sys.argv[1:])
+def main(args, tmp):
+    """
+    Main entry point for the script
+    """
     if CONVERT is None:
         sys.exit(
             "Unable to detect the required 'convert' executable from ImageMagick")
     if shutil.which("pdftk") is None and args.pdftk:
         sys.exit("Used --pdftk flag but the pdftk executable was not found")
 
-    tmp = mkdtemp()
     with get_ssh_client(args.password) as client:
+        print("Gathering fata from the rM device")
         notebook_id = get_notebook_id(client, args.prefix)
         if not notebook_id:
             sys.exit(
@@ -404,15 +406,25 @@ if __name__ == "__main__":
             sys.exit("Unable to copy any file from the device")
 
     metadata = get_extended_metadata(tmp, notebook_id, templates)
+    print("Preparing background document")
     background = prepare_background(
         tmp, metadata, filenames, notebook_id, resizebg=args.pdftk)
+    print("Preparing annotations")
     foreground = prepare_foreground(
         tmp, filenames, args.singlefile, args.coloured)
+    print("Preparing final PDF")
     make_annotated_pdf(metadata["visibleName"],
                        background, foreground, pdftk=args.pdftk)
 
-    if not args.keeptmp:
-        print("Cleaning up temporary folder {}".format(tmp))
-        shutil.rmtree(tmp)
-    else:
-        print("The intermediate files are available in {}".format(tmp))
+
+if __name__ == "__main__":
+    args = parse_args_or_exit(sys.argv[1:])
+    tmp = mkdtemp()
+    try:
+        main(args, tmp)
+    finally:
+        if not args.keeptmp:
+            print("Cleaning up temporary folder {}".format(tmp))
+            shutil.rmtree(tmp)
+        else:
+            print("The intermediate files are available in {}".format(tmp))
