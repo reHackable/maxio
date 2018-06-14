@@ -29,6 +29,7 @@ XOCHITL_PATH = ".local/share/remarkable/xochitl/"
 # - rM2svg python module
 # - convert (imagemagick)
 # - rsvg-convert (optional, to avoid rasterizing of lines)
+# - ghostscript, pdftk (optional)
 
 # NOTE: they will be None if the command is not present!
 CONVERT = shutil.which("convert")
@@ -227,7 +228,7 @@ def get_background_original_geometry(pdfname):
     return width, height
 
 
-def prepare_background(tmp, metadata, filenames, notebook_id):
+def prepare_background(tmp, metadata, filenames, notebook_id, resizebg=False):
     """
     Does the magic to prepare background pdfs with the right
     templates, sizes and offsets. It requires 'convert' to be
@@ -264,8 +265,8 @@ def prepare_background(tmp, metadata, filenames, notebook_id):
         bg_original
     )
 
-    # use gs for now but will move to PyPDF2
-    if shutil.which("gs"):
+    # NOTE: this is needed only when pdftk is used
+    if resizebg and shutil.which("gs"):
         width, height = get_background_original_geometry(bg_original)
         new_width = height / REMARKABLE_H * REMARKABLE_W
         offset = new_width - width
@@ -286,7 +287,8 @@ def prepare_background(tmp, metadata, filenames, notebook_id):
         subprocess.call(cmd)
         os.symlink(bg_offset, background)
     else:
-        print("Unable to find 'gs', skipping offset and resize of the background PDF")
+        if resizebg:
+            print("Unable to find 'gs', skipping offset and resize of the background PDF")
         os.symlink(bg_original, background)
 
     return background
@@ -328,8 +330,7 @@ def prepare_foreground(tmp, filenames, singlefile, coloured):
 
 
 # From https://github.com/tesseract-ocr/tesseract/issues/660#issuecomment-273629726
-# TODO: with the rescaling performed here we probably don't need
-#       to rescale the background
+# Note: with the rescaling performed here we don't need to rescale the background
 def merge_pdfs(background, foreground, destination):
     """
     Use PyPDF2 to merge the [background] and [foreground] pdfs,
@@ -339,11 +340,15 @@ def merge_pdfs(background, foreground, destination):
         bg_pdf = PyPDF2.PdfFileReader(bg_pdfh)
         fg_pdf = PyPDF2.PdfFileReader(fg_pdfh)
         destination_pdf = PyPDF2.PdfFileWriter()
+
         for bg_page, fg_page in zip(bg_pdf.pages, fg_pdf.pages):
-            _, _, width, height = bg_page.mediaBox
-            fg_page.scaleTo(float(width), float(height))
-            bg_page.mergePage(fg_page)
-            destination_pdf.addPage(bg_page)
+            _, _, _, height = bg_page.mediaBox
+            new_width = height / REMARKABLE_H * REMARKABLE_W
+            base_page = PyPDF2.pdf.PageObject.createBlankPage(width=new_width, height=height)
+            base_page.mergePage(bg_page)
+            fg_page.scaleTo(new_width, height)
+            base_page.mergePage(fg_page)
+            destination_pdf.addPage(base_page)
 
         bg_len, fg_len = len(bg_pdf.pages), len(fg_pdf.pages)
         if bg_len != fg_len:
@@ -381,6 +386,8 @@ if __name__ == "__main__":
     if CONVERT is None:
         sys.exit(
             "Unable to detect the required 'convert' executable from ImageMagick")
+    if shutil.which("pdftk") is None and args.pdftk:
+        sys.exit("Used --pdftk flag but the pdftk executable was not found")
 
     tmp = mkdtemp()
     with get_ssh_client(args.password) as client:
@@ -394,12 +401,10 @@ if __name__ == "__main__":
             sys.exit("Unable to copy any file from the device")
 
     metadata = get_extended_metadata(tmp, notebook_id, templates)
-    background = prepare_background(tmp, metadata, filenames, notebook_id)
+    background = prepare_background(
+        tmp, metadata, filenames, notebook_id, resizebg=args.pdftk)
     foreground = prepare_foreground(
         tmp, filenames, args.singlefile, args.coloured)
-
-    if shutil.which("pdftk") is None and args.pdftk:
-        sys.exit("Used --pdftk flag but the pdftk executable was not found")
     make_annotated_pdf(metadata["visibleName"],
                        background, foreground, pdftk=args.pdftk)
 
