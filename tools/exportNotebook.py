@@ -53,7 +53,9 @@ def parse_args_or_exit(argv=None):
                         help="Colour annotations for document markup.",
                         action='store_true')
     parser.add_argument("--pdftk",
-                        help="Assemble the pdfs with pdftk instead of PyPDF2.",
+                        help="Assemble the pdfs with pdftk instead of PyPDF2. "
+                             "This is faster and prodces smaller output when "
+                             "exporting template-based notebooks.",
                         action='store_true')
     parser.add_argument("-1",
                         "--singlefile",
