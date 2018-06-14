@@ -306,7 +306,6 @@ def prepare_foreground(tmp, filenames, singlefile, coloured):
         tmp,
         next(fname for fname in filenames if fname.endswith(".lines"))
     )
-    # TODO: make the --singlefile option of rM2SVG configurable
     lines2svg(lines_path, output_prefix,
               singlefile=singlefile, coloured_annotations=coloured)
 
