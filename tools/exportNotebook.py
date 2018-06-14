@@ -344,7 +344,10 @@ def merge_pdfs(background, foreground, destination):
         for bg_page, fg_page in zip(bg_pdf.pages, fg_pdf.pages):
             _, _, _, height = bg_page.mediaBox
             new_width = height / REMARKABLE_H * REMARKABLE_W
-            base_page = PyPDF2.pdf.PageObject.createBlankPage(width=new_width, height=height)
+            # workaround PyPDF2 FloatObject inconsistency
+            height, new_width = float(height), float(new_width)
+            base_page = PyPDF2.pdf.PageObject.createBlankPage(
+                width=new_width, height=height)
             base_page.mergePage(bg_page)
             fg_page.scaleTo(new_width, height)
             base_page.mergePage(fg_page)
