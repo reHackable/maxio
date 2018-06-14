@@ -14,11 +14,19 @@ x_width = 1404
 y_width = 1872
 
 # Mappings
-stroke_colour = {
+STROKE_BW = {
     0: "black",
     1: "grey",
     2: "white",
-    }
+}
+
+
+STROKE_C = {
+    0: "blue",
+    1: "red",
+    2: "white",
+    3: "yellow"
+}
 
 '''stroke_width={
     0x3ff00000: 2,
@@ -61,15 +69,6 @@ def main():
     if not os.path.exists(args.input):
         parser.error('The file "{}" does not exist!'.format(args.input))
 
-    if args.coloured_annotations:
-        global stroke_colour
-        stroke_colour = {
-            0: "blue",
-            1: "red",
-            2: "white",
-            3: "yellow"
-        }
-
     lines2svg(args.input, args.output, args.singlefile, args.coloured_annotations)
 
 
@@ -79,6 +78,9 @@ def abort(msg):
 
 
 def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
+    # set the correct color map
+    stroke_colour = STROKE_C if coloured_annotations else STROKE_BW
+
     # Read the file in memory. Consider optimising by reading chunks.
     with open(input_file, 'rb') as f:
         data = f.read()
@@ -125,14 +127,14 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
             print('Unexpected value on page {} after nlayers'.format(page + 1))
 
         # Iterate through layers on the page (There is at least one)
-        for layer in range(nlayers):
+        for _layer in range(nlayers):
             fmt = '<I'
             (nstrokes,) = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
 
             # Iterate through the strokes in the layer (If there is any)
-            for stroke in range(nstrokes):
+            for _stroke in range(nstrokes):
                 fmt = '<IIIfI'
-                pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                pen, colour, _i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
                 opacity = 1
                 last_x = -1.; last_y = -1.
                 #if i_unk != 0: # No theory on that one
@@ -167,7 +169,7 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
                 # Iterate through the segments to form a polyline
                 for segment in range(nsegments):
                     fmt = '<fffff'
-                    xpos, ypos, pressure, tilt, i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+                    xpos, ypos, pressure, tilt, _i_unk2 = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
                     if pen == 0:
                         if 0 == segment % 8:
                             segment_width = (5. * tilt) * (6. * width - 10) * (1 + 2. * pressure * pressure * pressure)
