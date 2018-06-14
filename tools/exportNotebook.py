@@ -135,7 +135,7 @@ def get_notebook_id(client, prefix):
     if err:
         print("error: {}".format(err), file=sys.stderr)
 
-    if err and not out:
+    if err or not out:
         return None
 
     notebook_id = out.pop().strip()
@@ -327,6 +327,35 @@ def prepare_foreground(tmp, filenames, singlefile, coloured):
     return foreground
 
 
+# From https://github.com/tesseract-ocr/tesseract/issues/660#issuecomment-273629726
+# TODO: with the rescaling performed here we probably don't need
+#       to rescale the background
+def merge_pdfs(background, foreground, destination):
+    """
+    Use PyPDF2 to merge the [background] and [foreground] pdfs,
+    saving the result into [destination].
+    """
+    with open(background, 'rb') as bg_pdfh, open(foreground, 'rb') as fg_pdfh:
+        bg_pdf = PyPDF2.PdfFileReader(bg_pdfh)
+        fg_pdf = PyPDF2.PdfFileReader(fg_pdfh)
+        destination_pdf = PyPDF2.PdfFileWriter()
+        for bg_page, fg_page in zip(bg_pdf.pages, fg_pdf.pages):
+            _, _, width, height = bg_page.mediaBox
+            fg_page.scaleTo(float(width), float(height))
+            bg_page.mergePage(fg_page)
+            destination_pdf.addPage(bg_page)
+
+        bg_len, fg_len = len(bg_pdf.pages), len(fg_pdf.pages)
+        if bg_len != fg_len:
+            remaining_pages = fg_pdf.pages[bg_len:] if bg_len < fg_len \
+                else bg_pdf.pages[fg_len:]
+            for page in remaining_pages:
+                destination_pdf.addPage(page)
+
+        with open(destination, 'wb') as out:
+            destination_pdf.write(out)
+
+
 def make_annotated_pdf(name, background, foreground, pdftk=False):
     """
     Uses the [foreground] and [background] pdfs to assemble the final
@@ -335,15 +364,16 @@ def make_annotated_pdf(name, background, foreground, pdftk=False):
     if not name.endswith(".pdf"):
         name = "{}.pdf".format(name)
 
-    # NOTE: Here we assume that pdftk is present.
-    #       There is a check in main's body
+    # NOTE: Here we assume that when pdftk is present when somebody calls
+    #       it with pdftk=True. There is a check in main's body
     if pdftk:
         # Use multistamp instead of multibackground to preserve transparency
         cmd = ["pdftk", background, "multistamp", foreground, "output", name]
         subprocess.call(cmd)
-        print("Written {} to {}".format(os.stat(name).st_size, name))
     else:
-        raise NotImplementedError
+        merge_pdfs(background, foreground, name)
+
+    print("Written {} to {}".format(os.stat(name).st_size, name))
 
 
 if __name__ == "__main__":
