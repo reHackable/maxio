@@ -6,12 +6,8 @@ import argparse
 
 
 __prog_name__ = "rM2svg"
-__version__ = "0.0.1beta"
+__version__ = "0.0.2beta"
 
-
-# Size
-x_width = 1404
-y_width = 1872
 
 # Mappings
 stroke_colour = {
@@ -56,7 +52,25 @@ def main():
     parser.add_argument('--version',
                         action='version',
                         version='%(prog)s {version}'.format(version=__version__))
+    parser.add_argument("-x",
+                        "--x_width",
+                        help="Set width of document in pixels.",
+                        metavar="N",
+                        )
+    parser.add_argument("-y",
+                        "--y_width",
+                        help="Set height of document in pixels.",
+                        metavar="N",
+                        )
     args = parser.parse_args()
+
+    if (args.x_width):
+        x_width = args.x_width
+    print(x_width)
+
+    if (args.y_width):
+        y_width = args.y_width
+    print(y_width)
 
     if not os.path.exists(args.input):
         parser.error('The file "{}" does not exist!'.format(args.input))
@@ -70,7 +84,7 @@ def main():
             3: "yellow"
         }
 
-    lines2svg(args.input, args.output, args.singlefile, args.coloured_annotations)
+    lines2svg(args.input, args.output, args.singlefile, args.coloured_annotations, args.x_width, args.y_width)
 
 
 def abort(msg):
@@ -78,7 +92,7 @@ def abort(msg):
     sys.exit(1)
 
 
-def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
+def lines2svg(input_file, output_name, singlefile, coloured_annotations=False, x_width=1404, y_width=1872):
     # Read the file in memory. Consider optimising by reading chunks.
     with open(input_file, 'rb') as f:
         data = f.read()
