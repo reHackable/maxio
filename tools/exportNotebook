@@ -27,12 +27,10 @@ else
 fi
 
 # Check if ssh configuration for "remarkable" exists
-grep -Fxq "host remarkable" ~/.ssh/config
-if [ $? -eq 0 ]; then
-    SSH_IP="root@remarkable"
-else
-    SSH_IP="root@10.11.99.1"
-fi
+[ "$1" = "-r" ] || { echo 'Missing -r ADDRESS'; exit 1; }
+shift
+SSH_IP="root@$1"
+shift
 
 # Start SSH in ControlMaster mode
 control_path_dir=$(mktemp -d --suffix=ssh_remark)
@@ -113,7 +111,7 @@ else
 fi
 
 # Strip .pdf suffix if it already exists (document vs. notebook)
-filename=$(basename -s .pdf ${filename//\"/})
+filename=$(basename -s .pdf "${filename//\"/}")
 
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
