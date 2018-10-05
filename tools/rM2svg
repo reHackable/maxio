@@ -130,7 +130,7 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False, x
         if singlefile:
             output.write('<g id="p{}" style="display:{}">'.format(page, 'none' if page != 0 else 'inline')) # Opening page group, visible only for the first page.
         else:
-            output = open("{}_{:02}.svg".format(output_name, page+1), 'w')
+            output = open("{}_{:03}.svg".format(output_name, page+1), 'w')
             output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">\n'.format(y_width, x_width)) # BEGIN page
 
         fmt = '<BBH' # TODO might be 'I'
