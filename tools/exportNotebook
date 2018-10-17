@@ -17,7 +17,8 @@ fi
 command -v rM2svg >/dev/null 2>&1
 if [[ $? -ne 0 ]]; then
     if [[ -x rM2svg ]]; then
-        rM2svg_cmd="$(dirname `readlink -f $0`)/rM2svg"
+        mydir="$(readlink -f \"$0\")"
+        rM2svg_cmd="$(dirname mydir)/rM2svg"
     else
         print "Cannot find rM2svg"
         exit 1
@@ -40,11 +41,11 @@ control_options="-o ControlPath=$control_path_dir/%h_%p_%r -o ControlPersist=10s
 ssh -M ${control_options} ${SSH_IP} exit
 
 # Getting the notebook prefix (Newest notebook matching the name)
-id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
+id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l \"$1\"" | tail -n1 | cut -d. -f1,2)
 
 test -z "$id" && exit 1
 
-tmpfolder=$(mktemp -d)
+tmpfolder=$(mktemp -d -p .)
 
 # Getting notebook data
 scp $control_options -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
@@ -113,7 +114,7 @@ else
 fi
 
 # Strip .pdf suffix if it already exists (document vs. notebook)
-filename=$(basename -s .pdf ${filename//\"/})
+filename="$(basename -s .pdf "${filename//\"/}")"
 
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
