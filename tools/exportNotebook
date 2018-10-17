@@ -45,7 +45,7 @@ id=$(ssh ${control_options} ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.
 
 test -z "$id" && exit 1
 
-tmpfolder=$(mktemp -d)
+tmpfolder=$(mktemp -d -p .)
 
 # Getting notebook data
 scp $control_options -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
