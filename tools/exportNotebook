@@ -17,7 +17,7 @@ fi
 command -v rM2svg >/dev/null 2>&1
 if [[ $? -ne 0 ]]; then
     rM2svg_cmd="$(dirname `readlink -f $0`)/rM2svg"
-    if [[ ! -x ${rM2svg_cmd} ]]; then
+    if [ ! -x "$rM2svg_cmd" ]; then
         echo "Cannot find rM2svg"
         exit 1
     fi
@@ -112,9 +112,27 @@ fi
 # Extract annotations and create a PDF
 $rM2svg_cmd --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground" $2
 
+# Preprocess foreground*.svg
+# - set stroke-width to 3
+# - set opacity to 1
+for f in "${tmpfolder}"/foreground*.svg; do
+    # debug
+    #cp -v "$f" ~/debug/"$(basename "$f")" 
+    sed -i 's/stroke-width:5/stroke-width:3/g;s/opacity:0.9/opacity:1/g' "$f"
+done
+# - optimize svg with svgo
+if command -v "svgo" > /dev/null; then
+    for f in "${tmpfolder}"/foreground*.svg; do
+        svgo -i "$f"
+    done
+fi
 
+# Convert svg to pdf
 if command -v "inkscape" > /dev/null; then
-    inkscape "${tmpfolder}"/foreground*.svg --export-pdf="${tmpfolder}"/foreground.pdf
+    for f in "${tmpfolder}"/foreground*.svg; do
+        inkscape "$f" -d 200 --export-pdf="${f%.svg}.pdf"
+    done
+    pdftk "${tmpfolder}"/foreground*.pdf cat output "${tmpfolder}"/foreground.pdf
 elif command -v "rsvg-convert" > /dev/null; then
     rsvg-convert -a -f pdf "${tmpfolder}"/foreground*.svg -o "${tmpfolder}"/foreground.pdf
 else
