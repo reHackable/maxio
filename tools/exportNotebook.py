@@ -14,13 +14,13 @@ from tempfile import mkdtemp
 import PyPDF2
 import paramiko
 
-from rM2svg import lines2svg
+from rM2svg import lines2svg, DEFAULT_WIDTH, DEFAULT_HEIGHT
 
 __prog_name__ = "exportNotebook"
 __version__ = "0.0.1beta"
 
 REMARKABLE_IP = "10.11.99.1"
-REMARKABLE_H, REMARKABLE_W = 1872, 1404
+REMARKABLE_H, REMARKABLE_W = DEFAULT_HEIGHT, DEFAULT_WIDTH
 TPL_PATH = "/usr/share/remarkable/templates/"
 XOCHITL_PATH = ".local/share/remarkable/xochitl/"
 
@@ -296,7 +296,7 @@ def prepare_background(tmp, metadata, filenames, notebook_id, resizebg=False):
     return background
 
 
-def prepare_foreground(tmp, filenames, singlefile, coloured):
+def prepare_foreground(tmp, filenames, singlefile, coloured, width, height):
     """
     Extract annotations and create a PDF. Returns the foreground pdf path.
     """
@@ -307,7 +307,7 @@ def prepare_foreground(tmp, filenames, singlefile, coloured):
         next(fname for fname in filenames if fname.endswith(".lines"))
     )
     lines2svg(lines_path, output_prefix,
-              singlefile=singlefile, coloured_annotations=coloured)
+              singlefile=singlefile, coloured_annotations=coloured, width=width, height=height)
 
     foreground = os.path.join(tmp, "foreground.pdf")
     foreground_svgs = [str(svg) for svg in Path(tmp).glob("foreground*.svg")]
@@ -343,14 +343,12 @@ def merge_pdfs(background, foreground, destination):
         destination_pdf = PyPDF2.PdfFileWriter()
 
         for bg_page, fg_page in zip(bg_pdf.pages, fg_pdf.pages):
-            _, _, _, height = bg_page.mediaBox
-            new_width = height / REMARKABLE_H * REMARKABLE_W
-            # workaround PyPDF2 FloatObject inconsistency
-            height, new_width = float(height), float(new_width)
+            ll, lr, ul, ur = bg_page.mediaBox
+            width, height = ul - ll, ur - lr
             base_page = PyPDF2.pdf.PageObject.createBlankPage(
-                width=new_width, height=height)
+                width=width, height=height)
             base_page.mergePage(bg_page)
-            fg_page.scaleTo(new_width, height)
+            fg_page.scaleTo(width, height)
             base_page.mergePage(fg_page)
             destination_pdf.addPage(base_page)
 
@@ -411,8 +409,14 @@ def main(args, tmp):
     background = prepare_background(
         tmp, metadata, filenames, notebook_id, resizebg=args.pdftk)
     print("Preparing annotations")
+    # TODO: move prepare foreground in the merge, preparing each svg with the
+    # correct height and width
+    bg_pdf = PyPDF2.PdfFileReader(background)
+    bg_page = next(bg_pdf.pages)
+    ll, lr, ul, ur = bg_page.mediaBox
+    width, height = ul - ll, ur - lr
     foreground = prepare_foreground(
-        tmp, filenames, args.singlefile, args.coloured)
+        tmp, filenames, args.singlefile, args.coloured, width, height)
     print("Preparing final PDF")
     make_annotated_pdf(metadata["visibleName"],
                        background, foreground, pdftk=args.pdftk)
