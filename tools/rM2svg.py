@@ -10,8 +10,8 @@ __version__ = "0.0.1beta"
 
 
 # Size
-x_width = 1404
-y_width = 1872
+DEFAULT_WIDTH = 1404
+DEFAULT_HEIGHT = 1872
 
 # Mappings
 STROKE_BW = {
@@ -61,6 +61,8 @@ def main():
                         help="Colour annotations for document markup.",
                         action='store_true',
                         )
+    parser.add_argument('-x', '--width', default=DEFAULT_WIDTH, type=int)
+    parser.add_argument('-y', '--height', default=DEFAULT_HEIGHT, type=int)
     parser.add_argument('--version',
                         action='version',
                         version='%(prog)s {version}'.format(version=__version__))
@@ -69,7 +71,7 @@ def main():
     if not os.path.exists(args.input):
         parser.error('The file "{}" does not exist!'.format(args.input))
 
-    lines2svg(args.input, args.output, args.singlefile, args.coloured_annotations)
+    lines2svg(args.input, args.output, args.singlefile, args.coloured_annotations, width=args.width, height=args.height)
 
 
 def abort(msg):
@@ -77,7 +79,7 @@ def abort(msg):
     sys.exit(1)
 
 
-def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
+def lines2svg(input_file, output_name, singlefile, coloured_annotations, width, height):
     # set the correct color map
     stroke_colour = STROKE_C if coloured_annotations else STROKE_BW
 
@@ -101,7 +103,7 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
 
     if singlefile:
         output = open(output_name, 'w')
-        output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">'.format(y_width, x_width)) # BEGIN Notebook
+        output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">'.format(height, width)) # BEGIN Notebook
         output.write('''
             <script type="application/ecmascript"> <![CDATA[
                 var visiblePage = 'p0';
@@ -113,13 +115,22 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
             ]]> </script>
         ''')
 
+    def start_scale():
+        zoom = width / DEFAULT_WIDTH
+        output.write('<g transform="scale(%.03f %.03f)">' % (zoom, zoom))
+
+    def end_scale():
+        output.write('</g>')
+
     # Iterate through pages (There is at least one)
     for page in range(npages):
         if singlefile:
             output.write('<g id="p{}" style="display:{}">'.format(page, 'none' if page != 0 else 'inline')) # Opening page group, visible only for the first page.
+            start_scale()
         else:
             output = open("{}_{:02}.svg".format(output_name, page+1), 'w')
-            output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">\n'.format(y_width, x_width)) # BEGIN page
+            output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">\n'.format(height, width)) # BEGIN page
+            start_scale()
 
         fmt = '<BBH' # TODO might be 'I'
         nlayers, b_unk, h_unk = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
@@ -197,8 +208,10 @@ def lines2svg(input_file, output_name, singlefile, coloured_annotations=False):
         if singlefile:
             # Overlay the page with a clickable rect to flip pages
             output.write('<rect x="0" y="0" width="{}" height="{}" fill-opacity="0" onclick="goToPage(\'p{}\')" />'.format(x_width, y_width, (page + 1) % npages))
+            end_scale()
             output.write('</g>') # Closing page group
         else:
+            end_scale()
             output.write('</svg>') # END page
             output.close()
 
