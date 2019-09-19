@@ -7,6 +7,71 @@
 # - rsvg-convert (optional, to avoid rasterizing of lines)
 # - gs & pdfinfo (optional, to account for original pdf size)
 
+
+ASK_RENAME=""
+COLOR_ANNOTATIONS=""
+SSH_HOST="10.11.99.1"
+path=""
+STROKE_WIDTH="3"
+OPACITY="1"
+bad_args=""
+arg_num=0
+KEEP_TEMPDIR=""
+
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        -n|--askrename)
+            ASK_RENAME=true
+            shift
+            ;;
+        -c|--coloured_annotations)
+            COLOR_ANNOTATIONS=true
+            shift
+            ;;
+        -k|--keep_tempdir)
+            KEEP_TEMPDIR=true
+            shift
+            ;;
+        -r|--remoteip)
+            SSH_HOST="$2"
+            shift
+            shift
+            ;;
+        -w|--strokewidth)
+            STROKE_WIDTH="$2"
+            shift
+            shift
+            ;;
+        -o|--opacity)
+            OPACITY="$2"
+            shift
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            bad_args=TRUE
+            ;;
+        *)
+            arg_num=$(( $arg_num + 1 ))
+            case $arg_num in
+                1)
+                    path="$1"
+                    shift
+                    ;;
+                *)
+                    bad_args=TRUE
+            esac
+            ;;
+    esac
+done
+
+if [[ $bad_args == TRUE || $arg_num < 1 ]]; then
+    echo "Usage: $(basename "$0") [--askrename|-n] [--remoteip|-r STR] [--strokewidth|-w INT] [--opacity|-o FLOAT] [--coloured_annotations|-c] [--keep_tempdir|-k] <document-name-match|tar.gz-file>"
+    exit 1
+fi
+
+
 function rmtgrep {
     RET_MATCH="$(${SSH_CMD} "$SSH_REMOTE" "/bin/egrep -$1 '$2' $3")"
     echo "/bin/egrep -$1 '$2' $3: $RET_MATCH"
@@ -41,12 +106,12 @@ function find_document {
 
         if [[ "$(expr $3 + 1)" -eq "${#_PATH[@]}" ]]; then
             if echo "$metadata" | grep -qF '"type": "DocumentType"'; then
-                UUID="$(basename "$metadata_path" .metadata)"
+                _UUID="$(basename "$metadata_path" .metadata)"
                 NAME="$(echo "$metadata" | grep '"visibleName"' | sed 's/^.*: \+"\([^"]\+\)"/\1/g')"
                 IDATE="$(echo "$metadata" | grep '"lastModified"' | egrep -o '[0-9]*')"
                 STRDATE="$(date -d @$(expr ${IDATE} / 1000) '+%Y-%m-%d %H:%M:%S')"
-                DOCUMENTS_NAMES["$UUID"]="$NAME"
-                DOCUMENTS_DATES["$UUID"]="$STRDATE"
+                DOCUMENTS_NAMES["$_UUID"]="$NAME"
+                DOCUMENTS_DATES["$_UUID"]="$STRDATE"
             fi
         else
             if echo "$metadata" | grep -qF '"type": "CollectionType"'; then
@@ -64,13 +129,6 @@ function exit_failed {
 }
 
 
-# Usage
-if [[ $# -eq 0 ]] ; then
-    echo "Usage: ./exportNotebook (Partial)NotebookName AdditionalrM2svgArguments"
-    echo "You can additionally append the -c argument for coloured annotations."
-    exit 0
-fi
-
 # Make sure we have rM2svg
 command -v rM2svg >/dev/null 2>&1
 if [[ $? -ne 0 ]]; then
@@ -83,7 +141,7 @@ else
     rM2svg_cmd="rM2svg"
 fi
 
-path="$1"
+[ ! -z $COLOR_ANNOTATIONS ] && rM2svg_cmd="$rM2svg_cmd -c"
 
 tmpfolder=$(mktemp -d)
 echo "Using temp folder '$tmpfolder'"
@@ -95,8 +153,6 @@ if [ -f "$path" ]; then
 else
 
     # Establish remote connection
-    SSH_HOST="10.11.99.1"
-    [ "$1" = "-r" ] && shift && SSH_HOST="$1" && shift
     SSH_REMOTE="root@${SSH_HOST}"
     SSH_CMD="ssh -S remarkable-ssh"
     SCP_CMD="scp -o ControlPath=remarkable-ssh"
@@ -126,10 +182,10 @@ else
 
             # Display file id's from most recently modified to oldest
             for (( i=0; i<${#DOCUMENTS_UUIDS[@]}; i++ )); do
-                UUID=${DOCUMENTS_UUIDS[$i]}
-                NAME=${DOCUMENTS_NAMES[$UUID]}
-                STRDATE=${DOCUMENTS_DATES[$UUID]}
-                echo -e "$(expr $i + 1). - $UUID - $NAME - $STRDATE"
+                _UUID=${DOCUMENTS_UUIDS[$i]}
+                NAME=${DOCUMENTS_NAMES[$_UUID]}
+                STRDATE=${DOCUMENTS_DATES[$_UUID]}
+                echo -e "$(expr $i + 1). - $_UUID - $NAME - $STRDATE"
             done
 
             echo
@@ -137,7 +193,8 @@ else
             echo
 
             if [[ "$INPUT" -gt 0  && "$INPUT" -lt $(expr $i + 1) ]]; then
-                OUTPUT_UUID="${DOCUMENTS_UUIDS[(($INPUT-1))]}"
+                let INPUT=INPUT-1
+                OUTPUT_UUID="${DOCUMENTS_UUIDS[$INPUT]}"
                 break
             fi
 
@@ -151,7 +208,7 @@ else
     fi
 
     echo "UUID : $OUTPUT_UUID"
-    echo "Name : ${DOCUMENTS_NAMES[$UUID]}"
+    echo "Name : ${DOCUMENTS_NAMES[$OUTPUT_UUID]}"
 
 
     UUID_PATH="/home/root/.local/share/remarkable/xochitl/${OUTPUT_UUID}"
@@ -174,7 +231,7 @@ else
         done
     fi
 
-    filename="${DOCUMENTS_NAMES[$UUID]}"
+    filename="${DOCUMENTS_NAMES[$OUTPUT_UUID]}"
     # Strip .pdf suffix if it already exists (document vs. notebook)
     filename=$(basename -s .pdf "${filename//\"/}")
 
@@ -240,12 +297,10 @@ jq '.pages' "${tmpfolder}"/*.content | jq '.[]' | while read -r page; do
 done
 
 # Preprocess foreground*.svg
-# - set stroke-width to 3
-# - set opacity to 1
 for f in "${tmpfolder}"/foreground*.svg; do
     # debug
     #cp -v "$f" ~/debug/"$(basename "$f")" 
-    sed -i 's/stroke-width\:[\.0-9]\+/stroke-width:3/g;s/opacity:0.9/opacity:1/g' "$f"
+    sed -i "s/stroke-width\:[\.0-9]\+/stroke-width:${STROKE_WIDTH}/g;s/opacity\:[\.0-9]\+/opacity:${OPACITY}/g" "$f"
     [ ! $? -eq 0 ] && echo "Failed to reset stroke-width and opacity in '$f'" && exit 1
 done
 # - optimize svg with svgo
@@ -277,6 +332,19 @@ pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf out
 [ ! $? -eq 0 ] && echo "Failed to merge background and foreground pdfs" && exit 1
 
 filesize=$(ls -la "${filename}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
+
+if [ ! -z $ASK_RENAME ]; then
+    xdg-open "${filename}.pdf"
+    echo
+    read -rp "New name (w/o extension): " NEWFILENAME
+    echo
+    mv -v "${filename}.pdf" "${NEWFILENAME}.pdf"
+    mv -v "${filename}.tar.gz" "${NEWFILENAME}.tar.gz"
+    filename="${NEWFILENAME}"
+fi
+
 echo "Written ${filesize} to ${filename}.pdf"
 
-#rm -Rfv "${tmpfolder}"
+if [ -z $KEEP_TEMPDIR ]; then
+    rm -Rfv "${tmpfolder}"
+fi
