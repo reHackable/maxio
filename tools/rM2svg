@@ -2,7 +2,9 @@
 #
 # Script for converting reMarkable tablet ".rm" files to SVG image.
 # this works for the new *.rm format, where each page is a seperate file
-# credit for updating goes to
+# credits to
+# https://github.com/lschwetlick/maxio/tree/master/tools
+# which in turn credits
 # https://github.com/jmiserez/maxio/blob/ee15bcc86e4426acd5fc70e717468862dce29fb8/tmp-rm16-ericsfraga-rm2svg.py
 #
 
