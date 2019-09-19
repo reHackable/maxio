@@ -51,6 +51,7 @@ while [[ $# -gt 0 ]]; do
         -*)
             echo "Unknown option: $1"
             bad_args=TRUE
+            shift
             ;;
         *)
             arg_num=$(( $arg_num + 1 ))
@@ -145,6 +146,8 @@ fi
 
 tmpfolder=$(mktemp -d)
 echo "Using temp folder '$tmpfolder'"
+
+OUTPUT_UUID=""
 
 if [ -f "$path" ]; then
     tar -xvzf "$path" -C "$tmpfolder"
@@ -291,9 +294,26 @@ IPAGE=0
 jq '.pages' "${tmpfolder}"/*.content | jq '.[]' | while read -r page; do
     SPAGE="${page:1:${#page}-2}"
     let IPAGE=IPAGE+1
-    echo "Processing page $IPAGE ($SPAGE)"
-    $rM2svg_cmd --input "${tmpfolder}"/*/"${SPAGE}.rm" --output "${tmpfolder}/foreground$(printf %03d $IPAGE).svg"
-    [ ! $? -eq 0 ] && echo "Failed to generate '${tmpfolder}/foreground$(printf %03d $IPAGE).svg'" && exit 1
+    if [ -f "${tmpfolder}"/*/"${SPAGE}.rm" ]; then
+        echo "Processing page $IPAGE ($SPAGE)"
+        $rM2svg_cmd --input "${tmpfolder}"/*/"${SPAGE}.rm" --output "${tmpfolder}/foreground$(printf %03d $IPAGE).svg"
+        [ ! $? -eq 0 ] && echo "Failed to generate '${tmpfolder}/foreground$(printf %03d $IPAGE).svg'" && exit 1
+    else
+        echo "Generating empty page $IPAGE ($SPAGE)"
+cat << 'EOF' > "${tmpfolder}/foreground$(printf %03d $IPAGE).svg"
+<svg xmlns="http://www.w3.org/2000/svg" height="1872" width="1404">
+        <script type="application/ecmascript"> <![CDATA[
+            var visiblePage = 'p1';
+            function goToPage(page) {
+                document.getElementById(visiblePage).setAttribute('style', 'display: none');
+                document.getElementById(page).setAttribute('style', 'display: inline');
+                visiblePage = page;
+            }
+        ]]> </script>
+    <g id="p1" style="display:inline">
+<rect x="0" y="0" width="1404" height="1872" fill-opacity="0"/></g></svg>
+EOF
+    fi
 done
 
 # Preprocess foreground*.svg
@@ -333,18 +353,26 @@ pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf out
 
 filesize=$(ls -la "${filename}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
 
-if [ ! -z $ASK_RENAME ]; then
-    xdg-open "${filename}.pdf"
-    echo
-    read -rp "New name (w/o extension): " NEWFILENAME
-    echo
-    mv -v "${filename}.pdf" "${NEWFILENAME}.pdf"
-    mv -v "${filename}.tar.gz" "${NEWFILENAME}.tar.gz"
-    filename="${NEWFILENAME}"
-fi
-
 echo "Written ${filesize} to ${filename}.pdf"
 
 if [ -z $KEEP_TEMPDIR ]; then
-    rm -Rfv "${tmpfolder}"
+    rm -Rf "${tmpfolder}"
+else
+    echo "Left temporary dir '${tmpfolder}'"
 fi
+
+if [ ! -z $ASK_RENAME ]; then
+    xdg-open "${filename}.pdf"
+    [ ! -z "$OUTPUT_UUID" ] && echo "Last modified: ${DOCUMENTS_DATES[$OUTPUT_UUID]}"
+    echo
+    read -rp "New name (w/o extension): " NEWFILENAME
+    echo
+    if [ ! -z "$NEWFILENAME" ]; then
+        mv -v "${filename}.pdf" "${NEWFILENAME}.pdf"
+        mv -v "${filename}.tar.gz" "${NEWFILENAME}.tar.gz"
+        filename="${NEWFILENAME}"
+    else
+        rm -v "${filename}.pdf" "${filename}.tar.gz"
+    fi
+fi
+
