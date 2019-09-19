@@ -7,6 +7,64 @@
 # - rsvg-convert (optional, to avoid rasterizing of lines)
 # - gs & pdfinfo (optional, to account for original pdf size)
 
+function rmtgrep {
+    RET_MATCH="$(${SSH_CMD} "$SSH_REMOTE" "/bin/egrep -$1 '$2' $3")"
+    echo "/bin/egrep -$1 '$2' $3: $RET_MATCH"
+}
+
+declare -A DOCUMENTS_NAMES
+declare -A DOCUMENTS_DATES
+
+function find_document {
+    OLD_IFS=$IFS
+    IFS='/' _PATH=(${2#/}) # Sort path into array
+    IFS=$OLD_IFS
+
+    MATCH="${_PATH[$3]}"
+    [ ${MATCH: -1} == "$" ] && MATCH="${MATCH:0:-1}" || MATCH="${MATCH}.*"
+    [ ${MATCH:0:1} == "^" ] && MATCH="${MATCH:1}" || MATCH=".*${MATCH}"
+    rmtgrep "ile" "\"visibleName\": \"${MATCH}\"" "/home/root/.local/share/remarkable/xochitl/*.metadata"
+    echo $RET_MATCH
+    matches_by_name="$RET_MATCH"
+
+    for metadata_path in $matches_by_name; do
+
+        metadata="$(${SSH_CMD} "$SSH_REMOTE" "cat $metadata_path")"
+
+        if ! echo "$metadata" | grep -qF "\"parent\": \"$1\""; then
+            continue
+        fi
+
+        if echo "$metadata" | grep -qF '"deleted": true'; then
+            continue
+        fi
+
+        if [[ "$(expr $3 + 1)" -eq "${#_PATH[@]}" ]]; then
+            if echo "$metadata" | grep -qF '"type": "DocumentType"'; then
+                UUID="$(basename "$metadata_path" .metadata)"
+                NAME="$(echo "$metadata" | grep '"visibleName"' | sed 's/^.*: \+"\([^"]\+\)"/\1/g')"
+                IDATE="$(echo "$metadata" | grep '"lastModified"' | egrep -o '[0-9]*')"
+                STRDATE="$(date -d @$(expr ${IDATE} / 1000) '+%Y-%m-%d %H:%M:%S')"
+                DOCUMENTS_NAMES["$UUID"]="$NAME"
+                DOCUMENTS_DATES["$UUID"]="$STRDATE"
+            fi
+        else
+            if echo "$metadata" | grep -qF '"type": "CollectionType"'; then
+                find_document "$(basename "$metadata_path" .metadata)" "$2" "$(expr $3 + 1)"
+            fi
+        fi
+
+    done
+}
+
+# Kills SSH session and exits with return 1
+function exit_failed {
+    ${SSH_CMD} -O exit "$SSH_REMOTE"
+    exit 1
+}
+
+
+# Usage
 if [[ $# -eq 0 ]] ; then
     echo "Usage: ./exportNotebook (Partial)NotebookName AdditionalrM2svgArguments"
     echo "You can additionally append the -c argument for coloured annotations."
@@ -25,54 +83,119 @@ else
     rM2svg_cmd="rM2svg"
 fi
 
-# Check if ssh configuration for "remarkable" exists
-[ "$1" = "-r" ] || { echo 'Missing -r ADDRESS'; exit 1; }
-shift
-SSH_IP="root@$1"
-shift
-
-# Start SSH in ControlMaster mode
-ssh_cmd="ssh -o ControlPersist=10s"
-scp_cmd=scp
-rm_tmpfolders="rm -Rf \"${tmpfolder}\""
-
-grep ControlPath ~/.ssh/config >/dev/null
-if [ ! $? -eq 0 ]; then
-    control_path_dir=$(mktemp -d --suffix=ssh_remark)
-    control_options="-o ControlPath=$control_path_dir/%h_%p_%r"
-    rm_tmpfolders="${rm_tmpfolders} \"${control_path_dir}\""
-    ssh_cmd="${ssh_cmd} ${control_options}"
-    scp_cmd="${scp_cmd} ${control_options}"    
-fi
-${ssh_cmd} ${SSH_IP} exit
-
-# Getting the notebook prefix (Newest notebook matching the name)
-id=$(${ssh_cmd} -M ${SSH_IP} "ls -rt .local/share/remarkable/xochitl/*.metadata | xargs fgrep -l $1" | tail -n1 | cut -d. -f1,2)
-
-test -z "$id" && exit 1
+path="$1"
 
 tmpfolder=$(mktemp -d)
+echo "Using temp folder '$tmpfolder'"
 
-# Getting notebook data
-${scp_cmd} -q ${SSH_IP}:"${id}".{lines,pagedata,metadata} "${tmpfolder}"/
+if [ -f "$path" ]; then
+    tar -xvzf "$path" -C "$tmpfolder"
+    filename="$(basename $path .tar.gz)"
 
-# Copy underyling document pdf if it exists
-${ssh_cmd} -q ${SSH_IP} "[[ -f "${id}.pdf" ]]" && ${scp_cmd} -q ${SSH_IP}:"${id}.pdf" "${tmpfolder}"
+else
+
+    # Establish remote connection
+    SSH_HOST="10.11.99.1"
+    [ "$1" = "-r" ] && shift && SSH_HOST="$1" && shift
+    SSH_REMOTE="root@${SSH_HOST}"
+    SSH_CMD="ssh -S remarkable-ssh"
+    SCP_CMD="scp -o ControlPath=remarkable-ssh"
+    ${SSH_CMD} -o ConnectTimeout=1 -M -f -q ${SSH_REMOTE} -N
+    [ ! $? -eq 0 ] && echo "Failed to establish connection with the device!" && exit 1
+
+    # Search for given pattern
+    echo "Searching for '$path'"
+    find_document "" "$path" 0
+
+    DOCUMENTS_UUIDS=(${!DOCUMENTS_NAMES[@]})
+    echo "${#DOCUMENTS_UUIDS[@]}"
+    echo "${DOCUMENTS_UUIDS[@]}"
+
+    # Entry not found
+    if [ "${#DOCUMENTS_UUIDS[@]}" -eq 0 ]; then
+        echo "repull: Unable to find document: $path"
+        exit_failed
+    fi
+
+    # Multiple entries match
+    if [ "${#DOCUMENTS_UUIDS[@]}" -gt 1 ]; then
+        echo "'$path' matches multiple files!"
+
+        while true; do
+            echo
+
+            # Display file id's from most recently modified to oldest
+            for (( i=0; i<${#DOCUMENTS_UUIDS[@]}; i++ )); do
+                UUID=${DOCUMENTS_UUIDS[$i]}
+                NAME=${DOCUMENTS_NAMES[$UUID]}
+                STRDATE=${DOCUMENTS_DATES[$UUID]}
+                echo -e "$(expr $i + 1). - $UUID - $NAME - $STRDATE"
+            done
+
+            echo
+            read -rp "Select your target: " INPUT
+            echo
+
+            if [[ "$INPUT" -gt 0  && "$INPUT" -lt $(expr $i + 1) ]]; then
+                OUTPUT_UUID="${DOCUMENTS_UUIDS[(($INPUT-1))]}"
+                break
+            fi
+
+            echo "Invalid input"
+        done
+
+
+        # Entry found
+    else
+        OUTPUT_UUID="$DOCUMENTS_UUIDS"
+    fi
+
+    echo "UUID : $OUTPUT_UUID"
+    echo "Name : ${DOCUMENTS_NAMES[$UUID]}"
+
+
+    UUID_PATH="/home/root/.local/share/remarkable/xochitl/${OUTPUT_UUID}"
+    # Getting notebook data
+    ${SCP_CMD} -rp ${SSH_REMOTE}:"$UUID_PATH"{,.content,.pagedata,.metadata} "${tmpfolder}"/
+    [ ! $? -eq 0 ] && echo "Failed to get notebook data" && exit 1
+
+    # Copy underyling document pdf if it exists
+    ${SSH_CMD} ${SSH_REMOTE} "[[ -f "${UUID_PATH}.pdf" ]]"
+    if [ $? -eq 0 ]; then
+        ${SCP_CMD} ${SSH_REMOTE}:"${UUID_PATH}.pdf" "${tmpfolder}"
+        [ ! $? -eq 0 ] && echo "Failed to get underlying pdf document" && exit 1
+    fi
+
+    if [ ! -f "${tmpfolder}"/*.pdf ]; then
+        # Getting template files
+        sort -u "${tmpfolder}"/*.pagedata | while read -r tpl; do
+            ${SCP_CMD} -T ${SSH_REMOTE}:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
+            [ ! $? -eq 0 ] && echo "Failed to download template file '${tpl}'" && exit 1
+        done
+    fi
+
+    filename="${DOCUMENTS_NAMES[$UUID]}"
+    # Strip .pdf suffix if it already exists (document vs. notebook)
+    filename=$(basename -s .pdf "${filename//\"/}")
+
+    tar cvzf "${filename}.tar.gz" -C "${tmpfolder}" .
+
+    ${SSH_CMD} -O exit ${SSH_REMOTE}
+
+fi
 
 # Fix for single page notebooks with no template (empty pagedata file by default)
-if [ ! -s "${tmpfolder}"/*.pagedata ]
-then
+if [ ! -s "${tmpfolder}"/*.pagedata ]; then
   echo "Blank" > "${tmpfolder}"/*.pagedata
 fi
 
 # Fix empty lines in pagedata files
 sed -i -e "s/^[[:blank:]]*$/Blank/" "${tmpfolder}"/*.pagedata
 
-filename=$(grep -F  '"visibleName"' "${tmpfolder}"/*.metadata | cut -d: -f2- | grep -o '"[^"]*"')
-echo "Exporting notebook ${filename} ($(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1) pages)"
+NPAGES="$(wc -l "${tmpfolder}"/*.pagedata | cut -d\  -f1)"
+echo "Exporting '${filename}' (${NPAGES} pages)"
 
-if [ -f "${tmpfolder}"/*.pdf ]
-then
+if [ -f "${tmpfolder}"/*.pdf ]; then
     ln -s "${tmpfolder}/"*.pdf "${tmpfolder}/background_original.pdf"
     echo "Found underlying document PDF, using as background."
 
@@ -100,17 +223,21 @@ then
         ln -s ${tmpfolder}/background_original.pdf ${tmpfolder}/background.pdf
     fi
 else
-    # Getting template files
-    sort -u "${tmpfolder}"/*.pagedata | while read -r tpl; do
-    ${scp_cmd} -q ${SSH_IP}:"'/usr/share/remarkable/templates/${tpl}.png'" "${tmpfolder}"/
-    done
 
     # Generate a PDF file out of the templates
     sed -e "s|^|\"${tmpfolder}\"/\"|" -e 's|$|.png"|' "${tmpfolder}"/*.pagedata | tr '\n' ' ' | sed -e "s|$|-transparent white \"${tmpfolder}\"/background.pdf|" | xargs convert
+    [ ! $? -eq 0 ] && echo "Failed to generate a PDF file out of the templates" && exit 1
 fi
 
 # Extract annotations and create a PDF
-$rM2svg_cmd --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground" $2
+IPAGE=0
+jq '.pages' sandbox/ad41a482-16ee-4389-a7e2-9f8d444d8518.content | jq '.[]' | while read -r page; do
+    SPAGE="${page:1:${#page}-2}"
+    let IPAGE=IPAGE+1
+    echo "Processing page $IPAGE ($SPAGE)"
+    $rM2svg_cmd --input "${tmpfolder}"/*/"${SPAGE}.rm" --output "${tmpfolder}/foreground$(printf %03d $IPAGE).svg"
+    [ ! $? -eq 0 ] && echo "Failed to generate '${tmpfolder}/foreground$(printf %03d $IPAGE).svg'" && exit 1
+done
 
 # Preprocess foreground*.svg
 # - set stroke-width to 3
@@ -118,12 +245,14 @@ $rM2svg_cmd --input "${tmpfolder}"/*.lines --output "${tmpfolder}/foreground" $2
 for f in "${tmpfolder}"/foreground*.svg; do
     # debug
     #cp -v "$f" ~/debug/"$(basename "$f")" 
-    sed -i 's/stroke-width:5/stroke-width:3/g;s/opacity:0.9/opacity:1/g' "$f"
+    sed -i 's/stroke-width\:[\.0-9]\+/stroke-width:3/g;s/opacity:0.9/opacity:1/g' "$f"
+    [ ! $? -eq 0 ] && echo "Failed to reset stroke-width and opacity in '$f'" && exit 1
 done
 # - optimize svg with svgo
 if command -v "svgo" > /dev/null; then
     for f in "${tmpfolder}"/foreground*.svg; do
         svgo -i "$f"
+        [ ! $? -eq 0 ] && echo "Failed to optimize svg '$f'" && exit 1
     done
 fi
 
@@ -131,22 +260,23 @@ fi
 if command -v "inkscape" > /dev/null; then
     for f in "${tmpfolder}"/foreground*.svg; do
         inkscape "$f" -d 200 --export-pdf="${f%.svg}.pdf"
+        [ ! $? -eq 0 ] && echo "Failed to convert to pdf via inkscape '$f'" && exit 1
     done
     pdftk "${tmpfolder}"/foreground*.pdf cat output "${tmpfolder}"/foreground.pdf
+    [ ! $? -eq 0 ] && echo "Failed to merge inkscape pdfs" && exit 1
 elif command -v "rsvg-convert" > /dev/null; then
     rsvg-convert -a -f pdf "${tmpfolder}"/foreground*.svg -o "${tmpfolder}"/foreground.pdf
+    [ ! $? -eq 0 ] && echo "Failed to convert to pdf via rsvg-convert" && exit 1
 else
     convert -density 100 "${tmpfolder}"/foreground*.svg -transparent white "${tmpfolder}"/foreground.pdf
+    [ ! $? -eq 0 ] && echo "Failed to convert to pdf via convert" && exit 1
 fi
-
-# Strip .pdf suffix if it already exists (document vs. notebook)
-filename=$(basename -s .pdf "${filename//\"/}")
 
 # Use multistamp instead of multibackground to preserve transparency
 pdftk "${tmpfolder}"/background.pdf multistamp "${tmpfolder}"/foreground.pdf output "${filename}.pdf"
+[ ! $? -eq 0 ] && echo "Failed to merge background and foreground pdfs" && exit 1
 
 filesize=$(ls -la "${filename}.pdf" | awk '{print $5}' | numfmt --to=iec-i --suffix=B --format="%.3f")
 echo "Written ${filesize} to ${filename}.pdf"
 
-${ssh_cmd} -O exit ${SSH_IP}
-${rm_tmpfolders}
+#rm -Rfv "${tmpfolder}"
