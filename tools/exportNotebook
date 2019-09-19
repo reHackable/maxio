@@ -231,7 +231,7 @@ fi
 
 # Extract annotations and create a PDF
 IPAGE=0
-jq '.pages' sandbox/ad41a482-16ee-4389-a7e2-9f8d444d8518.content | jq '.[]' | while read -r page; do
+jq '.pages' "${tmpfolder}"/*.content | jq '.[]' | while read -r page; do
     SPAGE="${page:1:${#page}-2}"
     let IPAGE=IPAGE+1
     echo "Processing page $IPAGE ($SPAGE)"
