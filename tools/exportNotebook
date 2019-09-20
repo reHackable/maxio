@@ -365,7 +365,7 @@ if [ ! -z $ASK_RENAME ]; then
     xdg-open "${filename}.pdf"
     [ ! -z "$OUTPUT_UUID" ] && echo "Last modified: ${DOCUMENTS_DATES[$OUTPUT_UUID]}"
     echo
-    read -rp "New name (w/o extension): " NEWFILENAME
+    read -rp "New name w/o extension, or press Enter to delete files: " NEWFILENAME
     echo
     if [ ! -z "$NEWFILENAME" ]; then
         mv -v "${filename}.pdf" "${NEWFILENAME}.pdf"
