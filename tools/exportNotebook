@@ -142,7 +142,7 @@ else
     rM2svg_cmd="rM2svg"
 fi
 
-[ -n $COLOR_ANNOTATIONS ] && rM2svg_cmd="$rM2svg_cmd -c"
+[ -n "$COLOR_ANNOTATIONS" ] && rM2svg_cmd="$rM2svg_cmd -c"
 
 tmpfolder=$(mktemp -d)
 echo "Using temp folder '$tmpfolder'"
@@ -150,7 +150,8 @@ echo "Using temp folder '$tmpfolder'"
 OUTPUT_UUID=""
 
 if [ -f "$path" ]; then
-    tar -xvzf "$path" -C "$tmpfolder" || exit 1
+    tar -xvzf "$path" -C "$tmpfolder"
+    [ ! $? -eq 0 ] && echo "File '$path' exists, but it is not a valid .tar.gz" && exit 1
     filename="$(basename $path .tar.gz)"
 
 else
@@ -361,18 +362,18 @@ else
     echo "Left temporary dir '${tmpfolder}'"
 fi
 
-if [ -n $ASK_RENAME ]; then
+if [ -n "$ASK_RENAME" ]; then
     xdg-open "${filename}.pdf"
     [ -n "$OUTPUT_UUID" ] && echo "Last modified: ${DOCUMENTS_DATES[$OUTPUT_UUID]}"
     echo
-    read -rp "New name w/o extension, or press Enter to delete files: " NEWFILENAME
+    read -rp "New name w/o extension, '!rm' to delete files, Enter to skip: " NEWFILENAME
     echo
     if [ -n "$NEWFILENAME" ]; then
-        mv -vi "${filename}.pdf" "${NEWFILENAME}.pdf"
-        mv -vi "${filename}.tar.gz" "${NEWFILENAME}.tar.gz"
-        filename="${NEWFILENAME}"
-    else
-        rm -v "${filename}.pdf" "${filename}.tar.gz"
+        if [ "$NEWFILENAME" == "!rm" ]; then
+            rm -v "${filename}.pdf" "${filename}.tar.gz"
+        else
+            mv -vi "${filename}.pdf" "${NEWFILENAME}.pdf"
+            mv -vi "${filename}.tar.gz" "${NEWFILENAME}.tar.gz"
+        fi
     fi
 fi
-
