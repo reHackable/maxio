@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Script for converting reMarkable tablet ".rm" files to SVG image.
-# this works for the new *.rm format, where each page is a seperate file
+# this works for the new *.rm format, where each page is a separate file
 # credits to
 # https://github.com/lschwetlick/maxio/tree/master/tools
 # which in turn credits
