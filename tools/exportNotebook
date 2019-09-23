@@ -11,6 +11,7 @@
 ASK_RENAME=""
 COLOR_ANNOTATIONS=""
 SSH_HOST="10.11.99.1"
+SSH_TIMEOUT=1
 path=""
 STROKE_WIDTH="3"
 OPACITY="1"
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--remoteip)
             SSH_HOST="$2"
+            SSH_TIMEOUT=10
             shift
             shift
             ;;
@@ -160,7 +162,7 @@ else
     SSH_REMOTE="root@${SSH_HOST}"
     SSH_CMD="ssh -S remarkable-ssh"
     SCP_CMD="scp -o ControlPath=remarkable-ssh"
-    ${SSH_CMD} -o ConnectTimeout=1 -M -f -q ${SSH_REMOTE} -N
+    ${SSH_CMD} -o ConnectTimeout=${SSH_TIMEOUT} -M -f -q ${SSH_REMOTE} -N
     [ ! $? -eq 0 ] && echo "Failed to establish connection with the device!" && exit 1
 
     # Search for given pattern
@@ -366,7 +368,7 @@ if [ -n "$ASK_RENAME" ]; then
     xdg-open "${filename}.pdf"
     [ -n "$OUTPUT_UUID" ] && echo "Last modified: ${DOCUMENTS_DATES[$OUTPUT_UUID]}"
     echo
-    read -rp "New name w/o extension, '!rm' to delete files, Enter to skip: " NEWFILENAME
+    read -rp "New name w/o extension, '!rm' to delete '${filename}.{pdf,tar.gz}', Enter to skip: " NEWFILENAME
     echo
     if [ -n "$NEWFILENAME" ]; then
         if [ "$NEWFILENAME" == "!rm" ]; then

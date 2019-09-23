@@ -12,10 +12,11 @@ import sys
 import struct
 import os.path
 import argparse
+import re
 
 
 __prog_name__ = "rm2svg"
-__version__ = "0.0.2"
+__version__ = "0.0.2.1"
 
 
 # Size
@@ -102,16 +103,22 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
     offset = 0
 
     # Is this a reMarkable .lines file?
-    expected_header=b'reMarkable .lines file, version=3          '
+    
+    expected_header=b'reMarkable .lines file, version=#          '
     if len(data) < len(expected_header) + 4:
         abort('File too short to be a valid file')
 
     fmt = '<{}sI'.format(len(expected_header))
     header, nlayers = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
     # print('header={} nlayers={}'.format(header, nlayers))
-    if header != expected_header or nlayers < 1:
+    re_expected_header = f"^{str(expected_header,'utf-8').replace('#','([345])')}$"
+    re_expected_header_match = re.match(re_expected_header, str(header ,'utf-8'))
+    if (re_expected_header is None) or (nlayers < 1):
         abort('Not a valid reMarkable file: <header={}> <nlayers={}'.format(header, nlayers))
-
+    _stroke_fmt_by_vers = {
+        '3': '<IIIfI',
+	'5': '<IIIfII' }
+    _stroke_fmt = _stroke_fmt_by_vers[re_expected_header_match.groups(1)[0]]
     output = open(output_name, 'w')
     output.write('<svg xmlns="http://www.w3.org/2000/svg" height="{}" width="{}">'.format(y_width, x_width)) # BEGIN Notebook
     output.write('''
@@ -136,8 +143,11 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
         # print('nstrokes={}'.format(nstrokes))
         # Iterate through the strokes in the layer (If there is any)
         for stroke in range(nstrokes):
-            fmt = '<IIIfI'
-            pen, colour, i_unk, width, nsegments = struct.unpack_from(fmt, data, offset); offset += struct.calcsize(fmt)
+            fmt = _stroke_fmt
+            stroke_data = struct.unpack_from(fmt, data, offset)
+            offset += struct.calcsize(fmt)
+            pen, colour, i_unk, width = stroke_data[:4]
+            nsegments = stroke_data[-1]
             # print('pen={} colour={} i_unk={} width={} nsegments={}'.format(pen,colour,i_unk,width,nsegments))
             opacity = 1
             last_x = -1.; last_y = -1.
