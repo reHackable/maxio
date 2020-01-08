@@ -17,7 +17,7 @@ install all requirements:
 
 Convert a .lines file to an svg file
 
-    usage: rM2svn [-h] -i FILENAME -o NAME
+    usage: rM2svg [-h] -i FILENAME -o NAME
 
     optional arguments:
       -h, --help                      show this help message and exit
@@ -43,7 +43,7 @@ The `exportNotebook` script assumes a USB connection. If you are connected via
 WiFi, you can add an entry to your `~/.ssh/config`:
 
     host remarkable
-		   # adapt IP if necessary
+	   # adapt IP if necessary
            Hostname 10.11.99.1
            User root
            ForwardX11 no
