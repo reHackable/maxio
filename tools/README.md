@@ -17,7 +17,7 @@ install all requirements:
 
 Convert a .lines file to an svg file
 
-    usage: rM2svn [-h] -i FILENAME -o NAME
+    usage: rM2svg [-h] -i FILENAME -o NAME
 
     optional arguments:
       -h, --help                      show this help message and exit
