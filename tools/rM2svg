@@ -155,12 +155,12 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
                 #print('Unexpected value at offset {}'.format(offset - 12))
             if pen == 0 or pen == 1:
                 pass # Dynamic width, will be truncated into several strokes
-            elif pen == 2 or pen == 4: # Pen / Fineliner
+            elif pen == 2 or pen == 4 or pen==15 or pen==17: # Pen / Fineliner
                 width = 32 * width * width - 116 * width + 107
-            elif pen == 3: # Marker
+            elif pen == 3 or pen == 16 or pen == 12: # Marker or Paint brush
                 width = 64 * width - 112
                 opacity = 0.9
-            elif pen == 5: # Highlighter
+            elif pen == 5 or pen == 18: # Highlighter
                 width = 30
                 opacity = 0.2
                 if coloured_annotations:
@@ -168,7 +168,7 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
             elif pen == 6: # Eraser
                 width = 1280 * width * width - 4800 * width + 4510
                 colour = 2
-            elif pen == 7: # Pencil-Sharp
+            elif pen == 7 or pen == 13 or pen == 14: # Pencil-Sharp
                 width = 16 * width - 27
                 opacity = 0.9
             elif pen == 8: # Erase area
