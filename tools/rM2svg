@@ -180,7 +180,7 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
             width /= 2.3 # adjust for transformation to A4
             
             #print('Stroke {}: pen={}, colour={}, width={}, nsegments={}'.format(stroke, pen, colour, width, nsegments))
-            output.write('<polyline style="fill:none;stroke:{};stroke-width:{:.3f};opacity:{}" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
+            output.write('<polyline style="fill:none;stroke:{};stroke-width:{:.3f};opacity:{};stroke-linejoin:round" points="'.format(stroke_colour[colour], width, opacity)) # BEGIN stroke
 
             # Iterate through the segments to form a polyline
             for segment in range(nsegments):
